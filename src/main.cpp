@@ -5,7 +5,9 @@
 
 #include <SimpleFOC.h>
 #include <cmath>
-#include <tuple>
+#include <array>
+
+
 
 double position[3] = {0, 0, 0};
 
@@ -29,36 +31,115 @@ BLDCDriver3PWM FRKdriver  = BLDCDriver3PWM(26,27,14);
 // Input: x, y, z
 // Output: theta1, theta2, theta3 (in degrees, shifted origin)
 
-std::tuple<double,double,double> inverseKinematics(double x, double y, double z) {
-    // Step 1: compute r and theta1
-    double r = sqrt(x*x + y*y);
-    double theta1 = atan2(x, -y) * 180.0 / M_PI; // degrees
 
-    // Step 2: solve for theta3 from law of cosines
-    double d = sqrt(x*x + y*y) - hipLength;
-    double D = (thighLength*thighLength + kneeLength*kneeLength - d*d) / (2*thighLength*kneeLength);
-    if(D > 1) D = 1; 
-    if(D < -1) D = -1;
-    double theta3 = acos(D) * 180.0 / M_PI; // degrees
+std::array<double, 3> forwardKinematics(double theta1, double theta2, double theta3) {
+    // --- Step 1: shift angles back to "math origin" (undo calibration) ---
 
-    // Step 3: solve for theta2 from z-equation
-    double A = thighLength - kneeLength * cos(theta3 * M_PI/180.0);
-    double B = kneeLength * sin(theta3 * M_PI/180.0);
-    double theta2 = atan2(z - A*cos(0), B) * 180.0 / M_PI; // simplified form
+    // --- Step 2: convert to radians ---
+    double t1 = theta1 * M_PI / 180.0;
+    double t2 = theta2 * M_PI / 180.0;
+    double t3 = theta3 * M_PI / 180.0;
 
-    // Step 4: apply origin shift (θ1=90, θ2=40, θ3=85 as zero reference)
-    theta1 -= 90.0;
-    theta2 -= 40.0;
-    theta3 -= 85.0;
+    // --- Step 3: compute helper distance ---
+    double r = (thighLength - kneeLength * cos(t3)) * sin(t2) + (kneeLength * sin(t3)) * cos(t2);
+
+    // --- Step 4: compute x, y, z ---
+    double x = hipLength * sin(t1) - r * cos(t1);
+    double y = -hipLength * cos(t1) - r * sin(t1);
+    double z = -(thighLength - kneeLength * cos(t3)) * cos(t2) + (kneeLength * sin(t3)) * sin(t2);
+
+    return {x, y, z};
+}
+
+std::array<double, 3> inverseKinematics(double x, double y, double z) {
+    double h = hipLength;
+    double t = thighLength;
+    double k = kneeLength;
+
+    // Step 1: p = sqrt(x² + z² - h²)
+    double p = std::sqrt(std::max(x*x + z*z - h*h, 0.0));
+
+    // Step 2: L = sqrt(p² + y²)
+    double L = std::sqrt(p*p + y*y);
+
+    // Step 3: θ1 depends on z sign
+    double theta1;
+    if (z <= 0) {
+        theta1 = std::atan2(x, -z) + std::atan2(p, h);
+    } else {
+        theta1 = std::atan2(z, x) + std::atan2(p, h);
+    }
+
+    // Step 4: θ2
+    double cosTerm = (k*k - L*L - t*t) / (-2.0 * L * t);
+    cosTerm = std::max(-1.0, std::min(1.0, cosTerm)); // safe clamp
+    double theta2 = M_PI/2.0 - std::acos(cosTerm) + std::atan2(y, p);
+
+    // Step 5: θ3
+    double cosTheta3 = (L*L - k*k - t*t) / (-2.0 * k * t);
+    cosTheta3 = std::max(-1.0, std::min(1.0, cosTheta3));
+    double theta3 = std::acos(cosTheta3);
+
+    // Step 6: Convert to degrees
+    theta1 *= 180.0 / M_PI;
+    theta2 *= 180.0 / M_PI;
+    theta3 *= 180.0 / M_PI;
 
     return {theta1, theta2, theta3};
 }
 
-
 void setup () {
   Serial.begin(9600);
   Serial.println("Inverse Kinematics Ready");
-  Serial.println(std::get<0>(inverseKinematics(0,0,0)));
-  Serial.println(std::get<1>(inverseKinematics(0,0,0)));
-  Serial.println(std::get<2>(inverseKinematics(0,0,0)));
 }
+
+void processSerialInput() {
+    if (Serial.available()) {
+        String input = Serial.readStringUntil('\n');
+        input.trim();
+
+        if (input.startsWith("T")) {
+            // Process as angles: Ttheta1,theta2,theta3
+            input.remove(0, 1); // Remove the 'T'
+            int firstComma = input.indexOf(',');
+            int secondComma = input.indexOf(',', firstComma + 1);
+
+            if (firstComma > 0 && secondComma > firstComma) {
+                double theta1 = input.substring(0, firstComma).toDouble();
+                double theta2 = input.substring(firstComma + 1, secondComma).toDouble();
+                double theta3 = input.substring(secondComma + 1).toDouble();
+
+                std::array<double, 3> coords = forwardKinematics(theta1, theta2, theta3);
+                Serial.print("X: "); Serial.println(coords[0]);
+                Serial.print("Y: "); Serial.println(coords[1]);
+                Serial.print("Z: "); Serial.println(coords[2]);
+            } else {
+                Serial.println("Invalid input. Use format: Ttheta1,theta2,theta3");
+            }
+        } else {
+            // Process as coordinates: x,y,z
+            int firstComma = input.indexOf(',');
+            int secondComma = input.indexOf(',', firstComma + 1);
+
+            if (firstComma > 0 && secondComma > firstComma) {
+                double x = input.substring(0, firstComma).toDouble();
+                double y = input.substring(firstComma + 1, secondComma).toDouble();
+                double z = input.substring(secondComma + 1).toDouble();
+
+                std::array<double, 3> angles = inverseKinematics(x, y, z);
+                Serial.print("Theta1: "); Serial.println(angles[0]);
+                Serial.print("Theta2: "); Serial.println(angles[1]);
+                Serial.print("Theta3: "); Serial.println(angles[2]);
+            } else {
+                Serial.println("Invalid input. Use format: x,y,z");
+            }
+        }
+    }
+}
+
+void loop() {
+    processSerialInput();
+}
+
+
+

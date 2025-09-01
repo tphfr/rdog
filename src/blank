@@ -13,7 +13,7 @@ BLDCMotor motor1 = BLDCMotor(11);
 BLDCDriver3PWM driver1  = BLDCDriver3PWM(26,27,14);
 
 //Target variable
-float target_velocity = 3.14;
+float target_velocity = 60;
 
 //Serial command setting
 Commander command = Commander(Serial);

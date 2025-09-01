@@ -1,145 +1,99 @@
-// MKS DUAL FOC open-loop speed control routine.Test library: SimpleFOC 2.1.1 Test hardware: MKS DUAL FOC V3.1
-// Enter "T+number" in the serial port to set the speed of the two motors. For example, set the motor to rotate at 10rad/s, input "T10", and the motor will rotate at 5rad/s by default when it is powered on
-// When using your own motor, please remember to modify the default number of pole pairs, that is, the value in BLDCMotor(7), and set it to your own number of pole pairs
-// The default power supply voltage set by the program is 12V, please remember to modify the values in voltage_power_supply and voltage_limit variables if you use other voltages for power supply
-
 #include <SimpleFOC.h>
-#include <cmath>
-#include <array>
 
 
+MagneticSensorI2C sensor = MagneticSensorI2C(AS5600_I2C);
+MagneticSensorI2C sensor1 = MagneticSensorI2C(AS5600_I2C);
+TwoWire I2Cone = TwoWire(0);
+TwoWire I2Ctwo = TwoWire(1);
 
-double position[3] = {0, 0, 0};
+//Motor parameters
+BLDCMotor motor = BLDCMotor(11);
+BLDCDriver3PWM driver = BLDCDriver3PWM(32,33,25);
 
-//distance from hip's rotation axis to the knee driver gear, all in meters
-double hipLength = 0.15;
-double thighLength = 0.25;
-double kneeLength = 0.25;
+BLDCMotor motor1 = BLDCMotor(11);
+BLDCDriver3PWM driver1 = BLDCDriver3PWM(26,27,14);
 
-double degAngles[3] = {0, 0, 0};
+//Command settings
+float target_velocity = 0;
+Commander command = Commander(Serial);
+void doTarget(char* cmd) { command.scalar(&target_velocity, cmd); }
 
-BLDCMotor FRHmotor = BLDCMotor(11);
-BLDCDriver3PWM FRHdriver = BLDCDriver3PWM(32,33,25);
+void setup() {
+  I2Cone.begin(19,18, 400000); 
+  I2Ctwo.begin(23,5, 400000);
+  sensor.init(&I2Cone);
+  sensor1.init(&I2Ctwo);
+  //Connect the motor object with the sensor object
+  motor.linkSensor(&sensor);
+  motor1.linkSensor(&sensor1);
 
-BLDCMotor FRTmotor = BLDCMotor(11);
-BLDCDriver3PWM FRTdriver  = BLDCDriver3PWM(26,27,14);
+  //Supply voltage setting [V]
+  driver.voltage_power_supply = 9;
+  driver.init();
 
-BLDCMotor FRKmotor = BLDCMotor(11);
-BLDCDriver3PWM FRKdriver  = BLDCDriver3PWM(26,27,14);
+  driver1.voltage_power_supply = 9;
+  driver1.init();
+  //Connect the motor and driver objects
+  motor.linkDriver(&driver);
+  motor1.linkDriver(&driver1);
+  
+  //FOC model selection
+  motor.foc_modulation = FOCModulationType::SpaceVectorPWM;
+  motor1.foc_modulation = FOCModulationType::SpaceVectorPWM;
+  //Motion Control Mode Settings
+  motor.controller = MotionControlType::angle;
+  motor1.controller = MotionControlType::angle;
 
-// Constants: t, h, k
-// Input: x, y, z
-// Output: theta1, theta2, theta3 (in degrees, shifted origin)
+  //Speed PI loop setting
+  motor.PID_velocity.P = 0.1;
+  motor1.PID_velocity.P = 0.1;
+  motor.PID_velocity.I = 1;
+  motor1.PID_velocity.I = 1;
+  //Angle P ring setting
+  motor.P_angle.P = 20;
+  motor1.P_angle.P = 20;
+  //Max motor limit motor
+  motor.voltage_limit = 2;
+  motor1.voltage_limit = 2;
+  
+  //Speed low-pass filter time constant
+  motor.LPF_velocity.Tf = 0.01;
+  motor1.LPF_velocity.Tf = 0.01;
 
+  //Set a maximum speed limit
+  motor.velocity_limit = 50;
+  motor1.velocity_limit = 100;
 
-std::array<double, 3> forwardKinematics(double theta1, double theta2, double theta3) {
-    // --- Step 1: shift angles back to "math origin" (undo calibration) ---
+  Serial.begin(115200);
+  motor.useMonitoring(Serial);
+  motor1.useMonitoring(Serial);
 
-    // --- Step 2: convert to radians ---
-    double t1 = theta1 * M_PI / 180.0;
-    double t2 = theta2 * M_PI / 180.0;
-    double t3 = theta3 * M_PI / 180.0;
+  
+  //Initialize the motor
+  //motor.init();
+  motor1.init();
+  //Initialize FOC
+  motor.initFOC();
+  motor1.initFOC();
+  command.add('T', doTarget, "target velocity");
 
-    // --- Step 3: compute helper distance ---
-    double r = (thighLength - kneeLength * cos(t3)) * sin(t2) + (kneeLength * sin(t3)) * cos(t2);
-
-    // --- Step 4: compute x, y, z ---
-    double x = hipLength * sin(t1) - r * cos(t1);
-    double y = -hipLength * cos(t1) - r * sin(t1);
-    double z = -(thighLength - kneeLength * cos(t3)) * cos(t2) + (kneeLength * sin(t3)) * sin(t2);
-
-    return {x, y, z};
+  Serial.println(F("Motor ready."));
+  Serial.println(F("Set the target velocity using serial terminal:"));
+  
 }
 
-std::array<double, 3> inverseKinematics(double x, double y, double z) {
-    double h = hipLength;
-    double t = thighLength;
-    double k = kneeLength;
 
-    // Step 1: p = sqrt(x² + z² - h²)
-    double p = std::sqrt(std::max(x*x + z*z - h*h, 0.0));
-
-    // Step 2: L = sqrt(p² + y²)
-    double L = std::sqrt(p*p + y*y);
-
-    // Step 3: θ1 depends on z sign
-    double theta1;
-    if (z <= 0) {
-        theta1 = std::atan2(x, -z) + std::atan2(p, h);
-    } else {
-        theta1 = std::atan2(z, x) + std::atan2(p, h);
-    }
-
-    // Step 4: θ2
-    double cosTerm = (k*k - L*L - t*t) / (-2.0 * L * t);
-    cosTerm = std::max(-1.0, std::min(1.0, cosTerm)); // safe clamp
-    double theta2 = M_PI/2.0 - std::acos(cosTerm) + std::atan2(y, p);
-
-    // Step 5: θ3
-    double cosTheta3 = (L*L - k*k - t*t) / (-2.0 * k * t);
-    cosTheta3 = std::max(-1.0, std::min(1.0, cosTheta3));
-    double theta3 = std::acos(cosTheta3);
-
-    // Step 6: Convert to degrees
-    theta1 *= 180.0 / M_PI;
-    theta2 *= 180.0 / M_PI;
-    theta3 *= 180.0 / M_PI;
-
-    return {theta1, theta2, theta3};
-}
-
-void setup () {
-  Serial.begin(9600);
-  Serial.println("Inverse Kinematics Ready");
-}
-
-void processSerialInput() {
-    if (Serial.available()) {
-        String input = Serial.readStringUntil('\n');
-        input.trim();
-
-        if (input.startsWith("T")) {
-            // Process as angles: Ttheta1,theta2,theta3
-            input.remove(0, 1); // Remove the 'T'
-            int firstComma = input.indexOf(',');
-            int secondComma = input.indexOf(',', firstComma + 1);
-
-            if (firstComma > 0 && secondComma > firstComma) {
-                double theta1 = input.substring(0, firstComma).toDouble();
-                double theta2 = input.substring(firstComma + 1, secondComma).toDouble();
-                double theta3 = input.substring(secondComma + 1).toDouble();
-
-                std::array<double, 3> coords = forwardKinematics(theta1, theta2, theta3);
-                Serial.print("X: "); Serial.println(coords[0]);
-                Serial.print("Y: "); Serial.println(coords[1]);
-                Serial.print("Z: "); Serial.println(coords[2]);
-            } else {
-                Serial.println("Invalid input. Use format: Ttheta1,theta2,theta3");
-            }
-        } else {
-            // Process as coordinates: x,y,z
-            int firstComma = input.indexOf(',');
-            int secondComma = input.indexOf(',', firstComma + 1);
-
-            if (firstComma > 0 && secondComma > firstComma) {
-                double x = input.substring(0, firstComma).toDouble();
-                double y = input.substring(firstComma + 1, secondComma).toDouble();
-                double z = input.substring(secondComma + 1).toDouble();
-
-                std::array<double, 3> angles = inverseKinematics(x, y, z);
-                Serial.print("Theta1: "); Serial.println(angles[0]);
-                Serial.print("Theta2: "); Serial.println(angles[1]);
-                Serial.print("Theta3: "); Serial.println(angles[2]);
-            } else {
-                Serial.println("Invalid input. Use format: x,y,z");
-            }
-        }
-    }
-}
 
 void loop() {
-    processSerialInput();
+  //Serial.print(sensor.getAngle()); 
+  //Serial.print(" - "); 
+  //Serial.print(sensor1.getAngle());
+  Serial.println();
+  motor.loopFOC();
+  //motor1.loopFOC();
+
+  motor.move(target_velocity);
+  //motor1.move(target_velocity);
+  
+  command.run();
 }
-
-
-

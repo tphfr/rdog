@@ -62,19 +62,19 @@ void setup() {
 
   //Set a maximum speed limit
   motor.velocity_limit = 50;
-  motor1.velocity_limit = 100;
+  motor1.velocity_limit = 50;
 
-  Serial.begin(115200);
+  Serial.begin(9600);
   motor.useMonitoring(Serial);
   motor1.useMonitoring(Serial);
 
   
   //Initialize the motor
-  //motor.init();
-  motor1.init();
+  motor.init();
+  //motor1.init();
   //Initialize FOC
   motor.initFOC();
-  motor1.initFOC();
+  //motor1.initFOC();
   command.add('T', doTarget, "target velocity");
 
   Serial.println(F("Motor ready."));
@@ -82,13 +82,29 @@ void setup() {
   
 }
 
+bool kill_switch = true; // true = enabled, false = disabled
 
+void checkKillSwitch() {
+  if (Serial.available()) {
+    char c = Serial.read();
+    if (c == '/') {
+      kill_switch = !kill_switch;
+      Serial.print("Kill switch: ");
+      Serial.println(kill_switch ? "ON" : "OFF");
+    }
+  }
+}
 
 void loop() {
+  checkKillSwitch();
+  if (kill_switch) {
+    return;
+  }
+
   //Serial.print(sensor.getAngle()); 
   //Serial.print(" - "); 
   //Serial.print(sensor1.getAngle());
-  Serial.println();
+  //Serial.println();
   motor.loopFOC();
   //motor1.loopFOC();
 

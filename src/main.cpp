@@ -17,6 +17,13 @@ BLDCDriver3PWM driver1 = BLDCDriver3PWM(26,27,14);
 float target_velocity = 0;
 Commander command = Commander(Serial);
 void doTarget(char* cmd) { command.scalar(&target_velocity, cmd); }
+void doVelP(char* cmd) { command.scalar(&motor.PID_velocity.P, cmd); }
+void doVelI(char* cmd) { command.scalar(&motor.PID_velocity.I, cmd); }
+void doVelD(char* cmd) { command.scalar(&motor.PID_velocity.D, cmd); }
+void doAngleP(char* cmd) { command.scalar(&motor.P_angle.P, cmd); }
+
+
+
 
 void setup() {
   I2Cone.begin(19,18, 400000); 
@@ -28,6 +35,7 @@ void setup() {
   motor1.linkSensor(&sensor1);
 
   //Supply voltage setting [V]
+  driver.pwm_frequency = 50000;
   driver.voltage_power_supply = 9;
   driver.init();
 
@@ -38,30 +46,37 @@ void setup() {
   motor1.linkDriver(&driver1);
   
   //FOC model selection
-  motor.foc_modulation = FOCModulationType::SpaceVectorPWM;
+  motor1.foc_modulation = FOCModulationType::SpaceVectorPWM;
   motor1.foc_modulation = FOCModulationType::SpaceVectorPWM;
   //Motion Control Mode Settings
   motor.controller = MotionControlType::angle;
   motor1.controller = MotionControlType::angle;
 
+
+
   //Speed PI loop setting
-  motor.PID_velocity.P = 0.1;
+  motor.PID_velocity.P = 0.05;
   motor1.PID_velocity.P = 0.1;
-  motor.PID_velocity.I = 1;
+  motor.PID_velocity.I = 0.06;
   motor1.PID_velocity.I = 1;
+
   //Angle P ring setting
-  motor.P_angle.P = 20;
+  motor.P_angle.P = 1;
   motor1.P_angle.P = 20;
-  //Max motor limit motor
-  motor.voltage_limit = 2;
-  motor1.voltage_limit = 2;
-  
+
   //Speed low-pass filter time constant
   motor.LPF_velocity.Tf = 0.01;
   motor1.LPF_velocity.Tf = 0.01;
 
+
+  
+  //Max motor limit motor
+  motor.voltage_limit = 3;
+  motor.current_limit = 8;
+  motor1.voltage_limit = 2;
+
   //Set a maximum speed limit
-  motor.velocity_limit = 50;
+  motor.velocity_limit = 60;
   motor1.velocity_limit = 50;
 
   Serial.begin(9600);
@@ -76,6 +91,10 @@ void setup() {
   motor.initFOC();
   //motor1.initFOC();
   command.add('T', doTarget, "target velocity");
+  command.add('P', doVelP, "velocity P");
+  command.add('I', doVelI, "velocity I");
+  command.add('D', doVelD, "velocity D");
+  command.add('A', doAngleP, "angle P");
 
   Serial.println(F("Motor ready."));
   Serial.println(F("Set the target velocity using serial terminal:"));

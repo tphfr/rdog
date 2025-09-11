@@ -46,7 +46,7 @@ void setup() {
   motor1.linkDriver(&driver1);
   
   //FOC model selection
-  motor1.foc_modulation = FOCModulationType::SpaceVectorPWM;
+  motor.foc_modulation = FOCModulationType::SpaceVectorPWM;
   motor1.foc_modulation = FOCModulationType::SpaceVectorPWM;
   //Motion Control Mode Settings
   motor.controller = MotionControlType::angle;
@@ -55,13 +55,13 @@ void setup() {
 
 
   //Speed PI loop setting
-  motor.PID_velocity.P = 0.05;
+  motor.PID_velocity.P = 0.1;
   motor1.PID_velocity.P = 0.1;
-  motor.PID_velocity.I = 0.06;
+  motor.PID_velocity.I = 0.5;
   motor1.PID_velocity.I = 1;
 
   //Angle P ring setting
-  motor.P_angle.P = 1;
+  motor.P_angle.P = 3;
   motor1.P_angle.P = 20;
 
   //Speed low-pass filter time constant
@@ -71,12 +71,12 @@ void setup() {
 
   
   //Max motor limit motor
-  motor.voltage_limit = 3;
-  motor.current_limit = 8;
+  motor.voltage_limit = 4;
+  motor.current_limit = 12;
   motor1.voltage_limit = 2;
 
   //Set a maximum speed limit
-  motor.velocity_limit = 60;
+  motor.velocity_limit = 200;
   motor1.velocity_limit = 50;
 
   Serial.begin(9600);
@@ -115,10 +115,6 @@ void checkKillSwitch() {
 }
 
 void loop() {
-  checkKillSwitch();
-  if (kill_switch) {
-    return;
-  }
 
   //Serial.print(sensor.getAngle()); 
   //Serial.print(" - "); 

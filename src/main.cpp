@@ -76,7 +76,7 @@ void setup() {
   motor1.voltage_limit = 2;
 
   //Set a maximum speed limit
-  motor.velocity_limit = 200;
+  motor.velocity_limit = 100;
   motor1.velocity_limit = 50;
 
   Serial.begin(9600);
@@ -115,7 +115,10 @@ void checkKillSwitch() {
 }
 
 void loop() {
-
+  checkKillSwitch();
+  if (kill_switch) {
+    return;
+  }
   //Serial.print(sensor.getAngle()); 
   //Serial.print(" - "); 
   //Serial.print(sensor1.getAngle());

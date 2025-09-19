@@ -61,7 +61,7 @@ void setup() {
   motor1.PID_velocity.I = 1;
 
   //Angle P ring setting
-  motor.P_angle.P = 3;
+  motor.P_angle.P = 1;
   motor1.P_angle.P = 20;
 
   //Speed low-pass filter time constant

@@ -31,7 +31,7 @@ TwoWire FRHI2C = TwoWire(0);
 
 BLDCMotor FRTmotor = BLDCMotor(11);
 BLDCDriver3PWM FRTdriver  = BLDCDriver3PWM(26,27,14);
-MagneticSensorI2C FRHsensor = MagneticSensorI2C(AS5600_I2C);
+MagneticSensorI2C FRTsensor = MagneticSensorI2C(AS5600_I2C);
 TwoWire FRTI2C = TwoWire(1);
 
 BLDCMotor FRKmotor = BLDCMotor(11);
@@ -67,6 +67,12 @@ std::array<double, 3> inverseKinematics(double x, double y, double z, bool isFro
     double t = thighLength;
     double k = kneeLength;
 
+  //offset
+  x += 0.15;
+  y -= 0.3535;
+  z += 0.0;
+
+  
     if (isFrontLeg) {
     y += (frontBackJointDistance/2)*tan(pitchtheta);
   } else {
@@ -80,23 +86,23 @@ std::array<double, 3> inverseKinematics(double x, double y, double z, bool isFro
   }
 
     // Step 1: p = sqrt(x² + z² - h²)
-    double p = std::sqrt(std::max(x*x + z*z - h*h, 0.0));
+    double p = std::sqrt(std::max(x*x + y*y - h*h, 0.0));
 
     // Step 2: L = sqrt(p² + y²)
-    double L = std::sqrt(p*p + y*y);
+    double L = std::sqrt(p*p + z*z);
 
     // Step 3: θ1 depends on z sign
     double theta1;
-    if (z <= 0) {
-        theta1 = std::atan2(x, -z) + std::atan2(p, h);
+    if (y <= 0) {
+        theta1 = std::atan2(x, -y) + std::atan2(p, h);
     } else {
-        theta1 = std::atan2(z, x) + std::atan2(p, h);
+        theta1 = std::atan2(y, x) + std::atan2(p, h) + M_PI/2.0;
     }
 
     // Step 4: θ2
     double cosTerm = (k*k - L*L - t*t) / (-2.0 * L * t);
     cosTerm = std::max(-1.0, std::min(1.0, cosTerm)); // safe clamp
-    double theta2 = M_PI/2.0 - std::acos(cosTerm) + std::atan2(y, p);
+    double theta2 = M_PI/2.0 - std::acos(cosTerm) + std::atan2(z, p);
 
     // Step 5: θ3
     double cosTheta3 = (L*L - k*k - t*t) / (-2.0 * k * t);
@@ -132,10 +138,11 @@ double stepMotion() {
   */
 
   //transform that x y z into angled using directional angle
-  double x = x1 * sin(directionalAngle);
-  double z = z1 * cos(directionalAngle);
+  double x = 0 * sin(directionalAngle);
+  double z = 0 * cos(directionalAngle);
   //send those angles to inverse kinematics
   //move to those angles
+  return 0;
 } 
 
 void setup () {
@@ -176,10 +183,10 @@ void processSerialInput() {
                 double y = input.substring(firstComma + 1, secondComma).toDouble();
                 double z = input.substring(secondComma + 1).toDouble();
 
-                std::array<double, 3> angles = inverseKinematics(x, y, z);
-                Serial.print("Theta1: "); Serial.println(angles[0]);
-                Serial.print("Theta2: "); Serial.println(angles[1]);
-                Serial.print("Theta3: "); Serial.println(angles[2]);
+                std::array<double, 3> angles = inverseKinematics(x, y, z, true, true);
+                Serial.print(String(x) +" is Theta1: "); Serial.println(angles[0]);
+                Serial.print(String(y) +" is Theta2: "); Serial.println(angles[1]);
+                Serial.print(String(z) +" is Theta3: "); Serial.println(angles[2]);
             } else {
                 Serial.println("Invalid input. Use format: x,y,z");
             }

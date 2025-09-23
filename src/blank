@@ -6,7 +6,7 @@
 #include <SimpleFOC.h>
 #include <cmath>
 #include <array>
-
+#include <Ramp.h>
 
 
 double position[3] = {0, 0, 0};
@@ -17,6 +17,11 @@ double thighLength = 0.25;
 double kneeLength = 0.25;
 double frontBackJointDistance = 0.6;
 double leftRightJointDistance = 0.3;
+
+ramp xreadings;
+ramp yreadings;
+ramp stepping;
+
 
 double pitchtheta = 0; // in radians
 double rolltheta = 0; // in radians
@@ -117,31 +122,55 @@ std::array<double, 3> inverseKinematics(double x, double y, double z, bool isFro
     return {theta1, theta2, theta3};
 }
 
+double PRControl() {
+    //establish current tilt from the input e.g. pitch +5 degrees, roll -5 degrees
+    //get imu readings
+    //compensate the imu by pitch -5 degrees, roll +5 degrees
+    //set as current pitch and roll angles
+    //if not angled zero, rotate the motors by that degree additionally so thatt the feet point flat to the ground
+}
+
+static double stepHeight = 0.05; //meters
+static double stepLength = 1.2 * stepHeight; //meters
+
 double stepMotion() {
-  double directionalAngle = 0; //change to readings
+  
+  double x1 = 1; //change to controller readings
+  double y1 = 0; //change to controller readings
+  xreadings.go(x1,0.5);
+  yreadings.go(y1,0.5);
+
+  double maxDirectionalMagnitude = 1; //change to max readings
+  double directionalAngle = atan2(yreadings.update(), xreadings.update()); //change to readings
+  double directionalMagnitudeCoefficient = sqrt(xreadings.update()*xreadings.update() + yreadings.update()*yreadings.update())/maxDirectionalMagnitude; //change to readings
   //create x y z coordinates in a half circle path forward
-  double stepHeight = 0.05; //meters
-  double stepLength = 1.2 * stepHeight; //meters
-  /*
-  0,0,0
-  0,stepHeight*sin(PI/6),stepLength*0.5*cos(0)-stepLength*0.5*cos(PI/6)
-  0,stepHeight*sin(2*PI/6),stepLength*0.5*cos(0)-stepLength*0.5*cos(2*PI/6)
-  0,stepHeight*sin(3*PI/6),stepLength*0.5*cos(0)-stepLength*0.5*cos(3*PI/6)
-  0,stepHeight*sin(4*PI/6),stepLength*0.5*cos(0)-stepLength*0.5*cos(4*PI/6)
-  0,stepHeight*sin(5*PI/6),stepLength*0.5*cos(0)-stepLength*0.5*cos(5*PI/6)
-  0,0,0
-  0,0,stepHeight*cos(0)-stepLength*0.5*cos(5*PI/6)
-  0,0,stepHeight*cos(0)-stepLength*0.5*cos(4*PI/6)
-  0,0,stepHeight*cos(0)-stepLength*0.5*cos(3*PI/6)
-  0,0,stepHeight*cos(0)-stepLength*0.5*cos(2*PI/6)
-  0,0,stepHeight*cos(0)-stepLength*0.5*cos(1*PI/6)
-  */
+
+  static double xyz[3] = {0,0,0};
+  static double lastLoop = millis();
+  double time = (millis() - lastLoop) / 1000.0; // seconds
+  static double halfloopTime = 0.5;
+  static double returnTime = 0.5;
+  if (time > halfloopTime) {
+      xyz[1] = 0;
+      xyz[2] = stepLength*0.5*cos(0)+stepLength*0.5*cos((time-halfloopTime)/halfloopTime*PI);
+    } else {
+      xyz[1] = stepHeight*sin(time/halfloopTime*PI);
+      xyz[2] = stepLength*0.5*cos(0)-stepLength*0.5*cos(time/halfloopTime*PI);
+    }
+  if (time > halfloopTime + returnTime) {
+      lastLoop = millis();
+  }
+
 
   //transform that x y z into angled using directional angle
-  double x = 0 * sin(directionalAngle);
-  double z = 0 * cos(directionalAngle);
+  double x = xyz[2] * directionalMagnitudeCoefficient * sin(directionalAngle);
+  double z = xyz[2] * directionalMagnitudeCoefficient * cos(directionalAngle);
   //send those angles to inverse kinematics
+  std::array<double, 3> moveTarget = inverseKinematics(x, xyz[1], z, true, true);
   //move to those angles
+  FRHmotor.move(moveTarget[0]);
+  FRTmotor.move(moveTarget[1]);
+  FRKmotor.move(moveTarget[2]);
   return 0;
 } 
 

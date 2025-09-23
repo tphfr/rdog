@@ -56,13 +56,13 @@ void setup() {
 
   //Speed PI loop setting
   motor.PID_velocity.P = 0.1;
-  motor1.PID_velocity.P = 0.1;
-  motor.PID_velocity.I = 0.5;
-  motor1.PID_velocity.I = 1;
+  motor1.PID_velocity.P = 0.05;
+  motor.PID_velocity.I = 0.4;
+  motor1.PID_velocity.I = 0.4;
 
   //Angle P ring setting
   motor.P_angle.P = 1;
-  motor1.P_angle.P = 20;
+  motor1.P_angle.P = 1;
 
   //Speed low-pass filter time constant
   motor.LPF_velocity.Tf = 0.01;
@@ -71,13 +71,14 @@ void setup() {
 
   
   //Max motor limit motor
-  motor.voltage_limit = 4;
+  motor.voltage_limit = 3;
   motor.current_limit = 12;
-  motor1.voltage_limit = 2;
+  motor1.voltage_limit = 3;
+  motor1.current_limit = 12;
 
   //Set a maximum speed limit
-  motor.velocity_limit = 100;
-  motor1.velocity_limit = 50;
+  motor.velocity_limit = 80;
+  motor1.velocity_limit = 110;
 
   Serial.begin(9600);
   motor.useMonitoring(Serial);
@@ -85,11 +86,11 @@ void setup() {
 
   
   //Initialize the motor
-  motor.init();
-  //motor1.init();
+  //motor.init();
+  motor1.init();
   //Initialize FOC
-  motor.initFOC();
-  //motor1.initFOC();
+  //motor.initFOC();
+  motor1.initFOC();
   command.add('T', doTarget, "target velocity");
   command.add('P', doVelP, "velocity P");
   command.add('I', doVelI, "velocity I");
@@ -119,15 +120,18 @@ void loop() {
   if (kill_switch) {
     return;
   }
-  //Serial.print(sensor.getAngle()); 
-  //Serial.print(" - "); 
-  //Serial.print(sensor1.getAngle());
-  //Serial.println();
-  motor.loopFOC();
-  //motor1.loopFOC();
 
-  motor.move(target_velocity);
-  //motor1.move(target_velocity);
-  
+  // Sinusoidal oscillation between -50 and 50, 1 period = 5 seconds
+  static unsigned long startTime = millis();
+  float elapsed = (millis() - startTime) / 1000.0; // seconds
+  float period = 3;
+  target_velocity = 50.0 * sin(2 * M_PI * elapsed / period);
+
+  //motor.loopFOC();
+  motor1.loopFOC();
+
+  //motor.move(target_velocity);
+  motor1.move(target_velocity);
+
   command.run();
 }

@@ -24,10 +24,17 @@ ramp xreadings;
 ramp yreadings;
 ramp stepping;
 
+//first number pitch, second number roll
+//front up is positive pitch, right up is positive roll
+double PRstate[1][2] = {0, 0};
 
-double pitchtheta = 0; // in radians
-double rolltheta = 0; // in radians
-double yawtheta = 0; // in radians
+double pitchtheta = 30; // in degrees
+double rolltheta = 20; // in degrees
+double yawtheta = 0; // in degrees
+
+ramp currentpitch;
+ramp currentroll;
+ramp currentyaw;
 
 double degAngles[3] = {0, 0, 0};
 
@@ -74,23 +81,14 @@ std::array<double, 3> inverseKinematics(double x, double y, double z, bool isFro
     double t = thighLength;
     double k = kneeLength;
 
-  //offset
-  x += 0.15;
-  y -= 0.3535;
-  z += 0.0;
+    //offset
+    x += 0.15;
+    y -= 0.3535;
+    z += 0.0;
 
   
-    if (isFrontLeg) {
-    y += (frontBackJointDistance/2)*tan(pitchtheta);
-  } else {
-    y -= (frontBackJointDistance/2)*tan(pitchtheta);
-  }
-
-  if (isRightLeg) {
-    y -= (leftRightJointDistance/2)*tan(rolltheta);
-  } else {
-    y += (leftRightJointDistance/2)*tan(rolltheta);
-  }
+    y += (isFrontLeg ? 1 : -1) * (frontBackJointDistance / 2) * tan(currentpitch.update());
+    y += (isRightLeg ? -1 : 1) * (leftRightJointDistance / 2) * tan(currentroll.update());
 
     // Step 1: p = sqrt(x² + z² - h²)
     double p = std::sqrt(std::max(x*x + y*y - h*h, 0.0));
@@ -116,7 +114,18 @@ std::array<double, 3> inverseKinematics(double x, double y, double z, bool isFro
     cosTheta3 = std::max(-1.0, std::min(1.0, cosTheta3));
     double theta3 = std::acos(cosTheta3);
 
-    // Step 6: Convert to degrees
+    // Step 6: additional motor rotation based on pitch and roll buttons
+    theta2 += currentpitch.update();
+    theta1 += (isRightLeg ? -1 : 1) * currentroll.update();
+
+    double pitch_imu_readings = 0; //replace with imu readings
+    double roll_imu_readings = 0; //replace with imu readings
+    
+    // Step 6.5: additional motor rotation based on imu readings
+    theta2 += pitch_imu_readings - currentpitch.update();
+    theta1 += (isRightLeg ? -1 : 1) * (roll_imu_readings - currentroll.update());
+
+    // Step 7: Convert to degrees (for testing)
     theta1 *= gearRatio;
     theta2 *= gearRatio;
     theta3 *= gearRatio;
@@ -128,16 +137,32 @@ std::array<double, 3> inverseKinematics(double x, double y, double z, bool isFro
     theta3 *= 180.0 / M_PI;
 }
 
-double PRControl() {
-  return 0;
-    //establish current tilt from the input e.g. pitch +5 degrees, roll -5 degrees
-    //get imu readings
-    //compensate the imu by pitch -5 degrees, roll +5 degrees
-    //set as current pitch and roll angles
-    //if not angled zero, rotate the motors by that degree additionally so thatt the feet point flat to the ground
+//remove parameters and use controller input directly later
+void updatePRstate(bool top, bool bottom, bool right, bool left) {
+    if (top)    PRstate[0][0] = (PRstate[0][0] ==  1) ? 0 :  1;
+    if (bottom) PRstate[0][0] = (PRstate[0][0] == -1) ? 0 : -1;
+    if (right)  PRstate[0][1] = (PRstate[0][1] ==  1) ? 0 :  1;
+    if (left)   PRstate[0][1] = (PRstate[0][1] == -1) ? 0 : -1;
 }
 
-double stepMotion() {
+double PRControl() {
+    //establish target tilt from the input e.g. pitch +20 degrees, roll -20 degrees
+    if (PRstate[0][0] != 0) {
+      currentpitch.go(PRstate[0][0] * pitchtheta * PI/180, 0.3);
+    } else {
+      currentpitch.go(0, 0.3);
+    }
+    if (PRstate[0][1] != 0) {
+      currentroll.go(PRstate[0][1] * rolltheta * PI/180, 0.3);
+    } else {
+      currentroll.go(0, 0.3);
+    }
+    return 0;
+    //read imu and subtract current theta
+
+}
+
+void stepMotion() {
   
   static double stepHeight = 0.05; //meters
   static double stepLength = 2.5 * stepHeight; //meters
@@ -181,7 +206,6 @@ double stepMotion() {
   FRTmotor.move(moveTarget[1]);
   FRKmotor.move(moveTarget[2]);
   */
-  return 0;
 } 
 
 void setup () {

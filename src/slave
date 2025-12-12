@@ -1,0 +1,62 @@
+#include <Arduino.h>
+#include <Ramp.h>
+#include <esp_now.h>
+#include <WiFi.h>
+
+//receiver MAC Address
+uint8_t broadcastAddress[] = {0x24, 0x6F, 0x28, 0xAE, 0x5C, 0xD4};
+
+double magnitude = 0.0;
+double angle = 0.0; // 0-360 degrees, 0 = forward
+double currentPitch = 0.0;
+double currentRoll = 0.0;
+double tiltState[2] = {0, 0}; // [0] = pitch (i/k), [1] = roll (j/l)
+double tiltTarget[2] = {0, 0}; // [0] = pitch (i/k), [1] = roll (j/l)
+
+typedef struct struct_message {
+    double magnitude;
+    double angle;
+    double tiltState[2];
+    double tiltTarget[2];
+} struct_message;
+
+struct_message incomingInformation;
+
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  memcpy(&incomingInformation, incomingData, sizeof(incomingInformation));
+  Serial.print("Bytes received: ");
+  Serial.println(len);
+  magnitude = incomingInformation.magnitude;
+  angle = incomingInformation.angle;
+  tiltState[0] = incomingInformation.tiltState[0];
+  tiltState[1] = incomingInformation.tiltState[1];
+  tiltTarget[0] = incomingInformation.tiltTarget[0];
+  tiltTarget[1] = incomingInformation.tiltTarget[1];
+}
+
+void setup() {
+  Serial.begin(9600);
+  // Set device as a Wi-Fi Station
+  WiFi.mode(WIFI_STA);
+
+  // Init ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+
+  // Register receive callback
+  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+
+  // Register peer
+  esp_now_peer_info_t peerInfo;
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+
+  // Add peer        
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer");
+    return;
+  }
+}

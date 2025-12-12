@@ -1,0 +1,98 @@
+#include <Arduino.h>
+#include <Ramp.h>
+
+// ==============================
+// --- GLOBAL VARIABLES ---
+// ==============================
+
+double velocity[2] = {0, 0}; // [0] = w/s (forward/back), [1] = a/d (left/right)
+ramp velocityRamp[2]; // Ramp for smooth transitions
+
+double angle = 0; // 0-360 degrees, 0 = forward
+double maxAngleSpeed = 90; // degrees per second
+
+double tiltState[2] = {0, 0}; // [0] = pitch (i/k), [1] = roll (j/l)
+double pitchTheta = 30; // degrees
+double rollTheta = 20;  // degrees
+ramp currentPitch;
+ramp currentRoll;
+
+unsigned long lastSendTime = 0;
+const unsigned long sendInterval = 200; // milliseconds
+
+// ==============================
+// --- SERIAL INPUT PROCESSING ---
+// ==============================
+
+void processSerialInput() {
+  if (Serial.available()) {
+    char c = Serial.read();
+
+    // Velocity control (WASD)
+    if (c == 'w') velocityRamp[0].go(1.0, 0.2);   // Forward
+    if (c == 's') velocityRamp[0].go(-1.0, 0.2);  // Backward
+    if (c == 'a') velocityRamp[1].go(-1.0, 0.2);  // Left
+    if (c == 'd') velocityRamp[1].go(1.0, 0.2);   // Right
+
+    // Angle control (QE)
+    if (c == 'q') angle -= maxAngleSpeed * 0.05; // Decrease angle (counter-clockwise)
+    if (c == 'e') angle += maxAngleSpeed * 0.05; // Increase angle (clockwise)
+
+    // Normalize angle to 0-360
+    while (angle < 0) angle += 360;
+    while (angle >= 360) angle -= 360;
+
+    // Tilt control (IJKL)
+    if (c == 'i') currentPitch.go(pitchTheta * M_PI / 180.0, 0.3);   // Pitch up
+    if (c == 'k') currentPitch.go(-pitchTheta * M_PI / 180.0, 0.3);  // Pitch down
+    if (c == 'j') currentRoll.go(-rollTheta * M_PI / 180.0, 0.3);    // Roll left
+    if (c == 'l') currentRoll.go(rollTheta * M_PI / 180.0, 0.3);     // Roll right
+
+    // Release key (space to center)
+    if (c == ' ') {
+      velocityRamp[0].go(0, 0.2);
+      velocityRamp[1].go(0, 0.2);
+      currentPitch.go(0, 0.3);
+      currentRoll.go(0, 0.3);
+    }
+  }
+
+  // Update ramps
+  velocity[0] = velocityRamp[0].update();
+  velocity[1] = velocityRamp[1].update();
+}
+
+// ==============================
+// --- SERIAL OUTPUT ---
+// ==============================
+
+void sendData() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastSendTime >= sendInterval) {
+    lastSendTime = currentTime;
+
+    // Format: angle,velocity_forward,velocity_strafe,pitch,roll
+    Serial.print(angle);
+    Serial.print(",");
+    Serial.print(velocity[0]);
+    Serial.print(",");
+    Serial.print(velocity[1]);
+    Serial.print(",");
+    Serial.print(currentPitch.update());
+    Serial.print(",");
+    Serial.println(currentRoll.update());
+  }
+}
+
+// ==============================
+// --- SETUP & LOOP ---
+// ==============================
+
+void setup() {
+  Serial.begin(115200);
+}
+
+void loop() {
+  processSerialInput();
+  sendData();
+}

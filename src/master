@@ -7,31 +7,39 @@
 #include <array>
 
 //receiver MAC Address
-uint8_t receiverAddresses[6][6] = {
-    {0x24, 0x6F, 0x28, 0xAE, 0x5C, 0xD4},
-    {0x24, 0x6F, 0x28, 0xB0, 0x3C, 0xA0},
-    {0x24, 0x6F, 0x28, 0xB0, 0x39, 0xE0},
-    {0x24, 0x6F, 0x28, 0xAE, 0x5D, 0x00},
-    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
-    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+
+uint8_t peerMac[6][6] = {
+  {0x24, 0x6F, 0x28, 0xAE, 0x5C, 0xD4}, // Front-Upper
+  {0x24, 0x6F, 0x28, 0xAE, 0x5C, 0xD4}, // Front-Middle
+  {0x24, 0x6F, 0x28, 0xAE, 0x5C, 0xD4}, // Front-Lower
+  {0x24, 0x6F, 0x28, 0xAE, 0x5C, 0xD4}, // Back-Upper
+  {0x24, 0x6F, 0x28, 0xAE, 0x5C, 0xD4}, // Back-Middle
+  {0x24, 0x6F, 0x28, 0xAE, 0x5C, 0xD4}  // Back-Lower
 };
 
-esp_now_peer_info_t peerInfos[6];
+enum states {
+  STATE_IDLE = 0,
+  STATE_WALKING = 1,
+  STATE_TURNING = 2
+};
 
-typedef struct struct_message {
-    double magnitude;
-    double angle;
-    double tiltState[2];
-    double tiltTarget[2];
-} struct_message;
+enum ControlCommand : uint8_t {
+  CMD_NONE = 0,
+  CMD_INIT = 1,
+  CMD_STOP = 2
+};
 
-struct_message outgoingInformation;
+typedef struct {
+  uint8_t command;
+  float thetal;
+  float thetar;
+} ControlPacket;
+
+ControlPacket outgoingInformation;
 
 String success;
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  Serial.print("\r\nLast Packet Send Status:\t");
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
   if (status ==0){
     success = "Delivery Success :)";
   }
@@ -73,24 +81,30 @@ void processSerialInput() {
     lastKeyTime = millis();
 
     // Velocity control (WASD)
-    if (c == 'w') velocityRamp[0].go(2.0, 0.2);   // Forward
-    if (c == 's') velocityRamp[0].go(0.0, 0.2);  // Backward
-    if (c == 'a') velocityRamp[1].go(0.0, 0.2);  // Left
-    if (c == 'd') velocityRamp[1].go(2.0, 0.2);   // Right
+    if (c == 'w') velocityRamp[0].go(2.0, 200);   // Forward
+    if (c == 's') velocityRamp[0].go(0.0, 200);  // Backward
+    if (c == 'a') velocityRamp[1].go(0.0, 200);  // Left
+    if (c == 'd') velocityRamp[1].go(2.0, 200);   // Right
 
     // Tilt control (IJKL)
-    if (c == 'i') currentPitch.go(pitchTheta * M_PI / 180.0, 0.3);   // Pitch up
-    if (c == 'k') currentPitch.go(-pitchTheta * M_PI / 180.0, 0.3);  // Pitch down
-    if (c == 'j') currentRoll.go(-rollTheta * M_PI / 180.0, 0.3);    // Roll left
-    if (c == 'l') currentRoll.go(rollTheta * M_PI / 180.0, 0.3);     // Roll right
+    //if (c == 'i') currentPitch.go(pitchTheta * M_PI / 180.0, 0.3);   // Pitch up
+    //if (c == 'k') currentPitch.go(-pitchTheta * M_PI / 180.0, 0.3);  // Pitch down
+    //if (c == 'j') currentRoll.go(-rollTheta * M_PI / 180.0, 0.3);    // Roll left
+    //if (c == 'l') currentRoll.go(rollTheta * M_PI / 180.0, 0.3);     // Roll right
+
+    if (c == 'h') {
+      outgoingInformation.command = CMD_INIT;
+      esp_now_send((uint8_t*)"\xFF\xFF\xFF\xFF\xFF\xFF",(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+    }
   }
 
   // Center if no key pressed for timeout duration
   if (millis() - lastKeyTime >= centerTimeout) {
-    velocityRamp[0].go(1, 0.2);
-    velocityRamp[1].go(1, 0.2);
-    currentPitch.go(0, 0.3);
-    currentRoll.go(0, 0.3);
+    velocityRamp[0].go(1, 200);
+    velocityRamp[1].go(1, 200);
+    currentPitch.go(0, 300);
+    currentRoll.go(0, 300);
   }
 
   double vr0 = velocityRamp[0].update()-1.0;
@@ -107,30 +121,47 @@ void processSerialInput() {
   magnitude = sqrt(vr0*vr0 + vr1*vr1) * multiplier;
 }
 
-// ==============================
-// --- SERIAL OUTPUT ---
-// ==============================
+
+std::array<float, 12> calculateAngles() {
+  float thetafr1, thetafr2, thetafr3;
+  float thetafl1, thetafl2, thetafl3;
+  float backright1, backright2, backright3;
+  float backleft1, backleft2, backleft3;
+  
+  float stepCycleTime = 1000.0; // milliseconds
+  
+
+  return {thetafr1, thetafr2, thetafr3,
+          thetafl1, thetafl2, thetafl3,
+          backright1, backright2, backright3,
+          backleft1, backleft2, backleft3};
+}
+
+void addPeers() {
+  esp_now_peer_info_t peerInfo = {};
+  peerInfo.channel = 0;     // must match receiver WiFi channel
+  peerInfo.encrypt = false;
+
+  for (int i = 0; i <= 5; i++) {
+    memcpy(peerInfo.peer_addr, peerMac[i], 6);
+
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+      Serial.print("Failed to add peer ");
+      Serial.println(i);
+    }
+  }
+}
 
 void sendData() {
   unsigned long currentTime = millis();
   if (currentTime - lastSendTime >= sendInterval) {
     lastSendTime = currentTime;
-
-    // Format: angle,velocity_forward,velocity_strafe,pitch,roll
-    Serial.print(angle);
-    Serial.print(",");
-    Serial.print(magnitude);
-    Serial.print(",");
-    Serial.print(currentPitch.update());
-    Serial.print(",");
-    Serial.println(currentRoll.update());
-    outgoingInformation.magnitude = magnitude;
-    outgoingInformation.angle = angle;
-    outgoingInformation.tiltState[0] = currentPitch.update();
-    outgoingInformation.tiltState[1] = currentRoll.update();
-    outgoingInformation.tiltTarget[0] = 0;
-    outgoingInformation.tiltTarget[1] = 0; // to be added later
-
+    std::array<float, 12> angles = calculateAngles();
+    for (int i = 0; i <= 5; i++) {
+      outgoingInformation.thetal = angles[0]; // Example assignment
+      outgoingInformation.thetar = angles[1]; // Example assignment
+      esp_now_send(peerMac[i],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    }
   }
 }
 
@@ -149,21 +180,13 @@ void setup() {
     return;
   }
 
+  addPeers();
+
   // Once ESPNow is successfully Init, we will register for Send CB to
   // get the status of Trasnmitted packet
   esp_now_register_send_cb(esp_now_send_cb_t(OnDataSent));
-  
-  // Register peer
-  for (int i = 0; i < 6; i++) {
-    memcpy(peerInfos[i].peer_addr, receiverAddresses[i], 6);
-    peerInfos[i].channel = 0;
-    peerInfos[i].encrypt = false;
-    if (esp_now_add_peer(&peerInfos[i]) != ESP_OK) {
-      Serial.println("Failed to add peer");
-      return;
-    }
   }
-}
+
 
 void loop() {
   processSerialInput();

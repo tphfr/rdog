@@ -2,36 +2,107 @@
 #include <Ramp.h>
 #include <esp_now.h>
 #include <WiFi.h>
+#include <SimpleFOC.h>
+#include <cmath>
+#include <array>
 
 //receiver MAC Address
+#define MY_ID 0
+
+TwoWire I2Cone = TwoWire(0);
+TwoWire I2Ctwo = TwoWire(1);
+
+// Magnetic sensors (AS5600)
+MagneticSensorI2C LEFTsensor = MagneticSensorI2C(AS5600_I2C);
+MagneticSensorI2C RIGHTsensor = MagneticSensorI2C(AS5600_I2C);
+
+// Drivers and Motors
+BLDCDriver3PWM LEFTdriver = BLDCDriver3PWM(32, 33, 25);
+BLDCMotor LEFTmotor = BLDCMotor(11);
+
+BLDCDriver3PWM RIGHTdriver = BLDCDriver3PWM(26, 27, 14);
+BLDCMotor RIGHTmotor = BLDCMotor(11);
+
 uint8_t broadcastAddress[] = {0x24, 0x6F, 0x28, 0xAE, 0x5C, 0xD4};
 
-double magnitude = 0.0;
-double angle = 0.0; // 0-360 degrees, 0 = forward
-double currentPitch = 0.0;
-double currentRoll = 0.0;
-double tiltState[2] = {0, 0}; // [0] = pitch (i/k), [1] = roll (j/l)
-double tiltTarget[2] = {0, 0}; // [0] = pitch (i/k), [1] = roll (j/l)
+float thetaL = 0;
+float thetaR = 0;
 
-typedef struct struct_message {
-    double magnitude;
-    double angle;
-    double tiltState[2];
-    double tiltTarget[2];
-} struct_message;
+typedef struct {
+  uint8_t command;
+  float thetal;
+  float thetar;
+} ControlPacket;
 
-struct_message incomingInformation;
+ControlPacket incomingInformation;
+
+
 
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&incomingInformation, incomingData, sizeof(incomingInformation));
-  Serial.print("Bytes received: ");
-  Serial.println(len);
-  magnitude = incomingInformation.magnitude;
-  angle = incomingInformation.angle;
-  tiltState[0] = incomingInformation.tiltState[0];
-  tiltState[1] = incomingInformation.tiltState[1];
-  tiltTarget[0] = incomingInformation.tiltTarget[0];
-  tiltTarget[1] = incomingInformation.tiltTarget[1];
+  
+  if (incomingInformation.command == 1) {
+    initialize();
+    return;
+  }
+
+  thetaL = incomingInformation.thetal;
+  thetaR = incomingInformation.thetar;
+
+}
+
+void initialize() {
+  I2Cone.begin(19, 18, 400000);
+  I2Ctwo.begin(23, 5, 400000);
+
+  LEFTsensor.init(&I2Cone);
+  RIGHTsensor.init(&I2Ctwo);
+
+  LEFTmotor.linkSensor(&LEFTsensor);
+  RIGHTmotor.linkSensor(&RIGHTsensor);
+
+  LEFTdriver.voltage_power_supply = 9;
+  RIGHTdriver.voltage_power_supply = 9;
+  LEFTdriver.pwm_frequency = 50000;
+  RIGHTdriver.pwm_frequency = 50000;
+  LEFTdriver.init();
+  RIGHTdriver.init();
+
+  LEFTmotor.linkDriver(&LEFTdriver);
+  RIGHTmotor.linkDriver(&RIGHTdriver);
+
+  LEFTmotor.controller = MotionControlType::angle;
+  RIGHTmotor.controller = MotionControlType::angle;
+
+  LEFTmotor.foc_modulation = FOCModulationType::SpaceVectorPWM;
+  RIGHTmotor.foc_modulation = FOCModulationType::SpaceVectorPWM;
+
+  LEFTmotor.voltage_limit = 3;
+  RIGHTmotor.voltage_limit = 3;
+  LEFTmotor.current_limit = 10;
+  RIGHTmotor.current_limit = 10;
+  LEFTmotor.velocity_limit = 100;
+  RIGHTmotor.velocity_limit = 100;
+
+  LEFTmotor.PID_velocity.P = 0.05;
+  RIGHTmotor.PID_velocity.P = 0.05;
+  LEFTmotor.PID_velocity.I = 0.4;
+  RIGHTmotor.PID_velocity.I = 0.4;
+  LEFTmotor.P_angle.P = 1;
+  RIGHTmotor.P_angle.P = 1;
+  LEFTmotor.LPF_velocity.Tf = 0.01;
+  RIGHTmotor.LPF_velocity.Tf = 0.01;
+
+  LEFTmotor.init();
+  RIGHTmotor.init();
+  LEFTmotor.initFOC();
+  RIGHTmotor.initFOC();
+
+  Serial.println("Motor ready. Enter commands or x,y,z values.");
+
+  LEFTmotor.useMonitoring(Serial);
+  RIGHTmotor.useMonitoring(Serial);
+
 }
 
 void setup() {
@@ -47,16 +118,11 @@ void setup() {
 
   // Register receive callback
   esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+}
 
-  // Register peer
-  esp_now_peer_info_t peerInfo;
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-  peerInfo.channel = 0;  
-  peerInfo.encrypt = false;
+void loop() {
+//if true then move motors
 
-  // Add peer        
-  if (esp_now_add_peer(&peerInfo) != ESP_OK){
-    Serial.println("Failed to add peer");
-    return;
-  }
+  LEFTmotor.move(thetaL);
+  RIGHTmotor.move(thetaR);
 }

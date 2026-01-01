@@ -5,6 +5,17 @@
 #include <SimpleFOC.h>
 #include <cmath>
 #include <array>
+#include <PSX.h>
+
+#define DATA_PIN 13
+#define CMD_PIN 12
+#define ATT_PIN 15
+#define CLOCK_PIN 14
+
+PSX psx;
+
+PSX::PSXDATA PSXdata;
+int PSXerror;
 
 //receiver MAC Address
 
@@ -39,16 +50,6 @@ ControlPacket outgoingInformation;
 
 String success;
 
-void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  if (status ==0){
-    success = "Delivery Success :)";
-  }
-  else{
-    success = "Delivery Fail :(";
-  }
-}
-
-
 // ==============================
 // --- GLOBAL VARIABLES ---
 // ==============================
@@ -68,9 +69,20 @@ ramp currentRoll;
 unsigned long lastSendTime = 0;
 const unsigned long sendInterval = 50; // milliseconds
 
-// ==============================
-// --- SERIAL INPUT PROCESSING ---
-// ==============================
+double langle;
+double lagnitude;
+
+double rangle;
+double ragnitude;
+
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  if (status ==0){
+    success = "Delivery Success :)";
+  }
+  else{
+    success = "Delivery Fail :(";
+  }
+}
 
 void processSerialInput() {
   static unsigned long lastKeyTime = 0;
@@ -121,6 +133,39 @@ void processSerialInput() {
   magnitude = sqrt(vr0*vr0 + vr1*vr1) * multiplier;
 }
 
+std::array<double, 3> inverseKinematics(double x, double y, double z, bool isFrontLeg, bool isRightLeg) {
+  double h = hipLength;
+  double t = thighLength;
+  double k = kneeLength;
+
+  x += 0.15;
+  y -= 0.3535;
+  z += 0.0;
+
+  y += (isFrontLeg ? 1 : -1) * (frontBackJointDistance / 2) * tan(currentpitch.update());
+  y += (isRightLeg ? -1 : 1) * (leftRightJointDistance / 2) * tan(currentroll.update());
+
+  double p = std::sqrt(std::max(x*x + y*y - h*h, 0.0));
+  double L = std::sqrt(p*p + z*z);
+
+  double theta1 = atan2(y, x);
+  double cosTerm = (k*k - L*L - t*t) / (-2.0 * L * t);
+  cosTerm = std::max(-1.0, std::min(1.0, cosTerm));
+  double theta2 = M_PI/2.0 - std::acos(cosTerm) + atan2(z, p);
+
+  double cosTheta3 = (L*L - k*k - t*t) / (-2.0 * k * t);
+  cosTheta3 = std::max(-1.0, std::min(1.0, cosTheta3));
+  double theta3 = std::acos(cosTheta3);
+
+  theta2 += currentpitch.update();
+  theta1 += (isRightLeg ? -1 : 1) * currentroll.update();
+
+  theta1 *= gearRatio;
+  theta2 *= gearRatio;
+  theta3 *= gearRatio;
+
+  return {theta1, theta2, theta3};
+}
 
 std::array<float, 12> calculateAngles() {
   float thetafr1, thetafr2, thetafr3;
@@ -165,6 +210,91 @@ void sendData() {
   }
 }
 
+void processPSData() {
+
+  PSXerror = psx.read(PSXdata);
+
+  
+  if(PSXerror == PSXERROR_SUCCESS) {
+  Serial.println("controller success");
+  } else {
+  Serial.print("No success reading data. Check connections and timing.");
+  }
+  
+  if(PSXdata.buttons & PSXBTN_START) {
+    outgoingInformation.command = CMD_INIT;
+    esp_now_send((uint8_t*)"\xFF\xFF\xFF\xFF\xFF\xFF",(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+  }
+
+  //read data
+  float LeftX = PSXdata.JoyLeftX; // 0-2
+  float LeftY = PSXdata.JoyLeftY;
+  float RightX = PSXdata.JoyRightX;
+  float RightY = PSXdata.JoyRightY;
+  
+  //if not touching center
+  if (126 < LeftX < 130 || 126 < LeftY < 130) {
+    velocityRamp[0].go(1.0, 200); // Center
+    velocityRamp[1].go(1.0, 200); // Center
+  } else { //else process input
+    // normalize to 0 to 2
+    double LX = LeftX / 128.0; // 0 to 2
+    double LY = LeftY / 128.0; // 0 to 2
+
+    //go to between 0 or 2
+    velocityRamp[0].go(LX, 200);
+    velocityRamp[1].go(LY, 200);
+  }
+
+   //go to -1 to 1
+    double vr0 = velocityRamp[0].update()-1.0;
+    double vr1 = velocityRamp[1].update()-1.0;
+
+    //constrain
+    vr0 = constrain(vr0, -1.0, 1.0);
+    vr1 = constrain(vr1, -1.0, 1.0);
+
+    //from square to circle
+    double xc = vr0 * sqrt(1.0 - (vr1*vr1)/2.0);
+    double yc = vr1 * sqrt(1.0 - (vr0*vr0)/2.0);
+
+    //theta, magnitude
+    langle = atan2(yc, xc);            // radians (-π to +π)
+    lagnitude = sqrt(xc*xc + yc*yc);  // 0 → 1
+
+}
+
+void stepMotion() {
+  static double stepHeight = 0.075;
+  static double stepLength = 4 * stepHeight;
+
+  static double xyz[3] = {0, 0, 0};
+  static unsigned long lastLoop = millis();
+  double time = (millis() - lastLoop) / 1000.0;
+  static double halfloopTime = 3.0;
+  static double returnTime = 3.0;
+
+  if (time > halfloopTime) {
+    xyz[1] = 0;
+    xyz[2] = stepLength*0.5*cos((time-halfloopTime)/halfloopTime*PI);
+  } else {
+    xyz[1] = stepHeight*sin(time/halfloopTime*PI);
+    xyz[2] = -stepLength*0.5*cos(time/halfloopTime*PI);
+  }
+  if (time > halfloopTime + returnTime) lastLoop = millis();
+
+  double x = xyz[2] * lagnitude * sin(langle);
+  double z = xyz[2] * lagnitude * cos(langle);
+
+  std::array<double, 3> moveTarget = inverseKinematics(x, xyz[1], z, true, true);
+  //Serial.println("coords" + String(x) + "," + String(xyz[1]) + "," + String(z) + " angles " + String(moveTarget[0]) + "," + String(moveTarget[1]) + "," + String(moveTarget[2]));
+
+  // if you have knee motor: FRTmotor.move(moveTarget[0]);
+  FRHmotor.move(moveTarget[1]);
+  //FRKmotor.move(moveTarget[2]);
+}
+
 // ==============================
 // --- SETUP & LOOP ---
 // ==============================
@@ -185,10 +315,15 @@ void setup() {
   // Once ESPNow is successfully Init, we will register for Send CB to
   // get the status of Trasnmitted packet
   esp_now_register_send_cb(esp_now_send_cb_t(OnDataSent));
+
+  psx.setupPins(DATA_PIN, CMD_PIN, ATT_PIN, CLOCK_PIN, 10);
+  psx.config(PSXMODE_ANALOG);
+
   }
 
 
 void loop() {
   processSerialInput();
+  processPSData();
   sendData();
 }

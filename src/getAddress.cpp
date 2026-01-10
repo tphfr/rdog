@@ -7,10 +7,10 @@
 #include <array>
 #include <PSX.h>
 
-#define DATA_PIN 32
-#define CMD_PIN 33
-#define ATT_PIN 25
-#define CLOCK_PIN 26
+#define DATA_PIN 12
+#define CMD_PIN 14
+#define ATT_PIN 13
+#define CLOCK_PIN 15
 
 PSX psx;
 
@@ -96,55 +96,6 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&incomingInformation, incomingData, sizeof(incomingInformation));
   
-}
-
-void processSerialInput() {
-  static unsigned long lastKeyTime = 0;
-  const unsigned long centerTimeout = 500; // milliseconds before centering
-
-  if (Serial.available()) {
-    char c = Serial.read();
-    lastKeyTime = millis();
-
-    // Velocity control (WASD)
-    if (c == 'w') velocityRamp[0].go(2.0, 200);   // Forward
-    if (c == 's') velocityRamp[0].go(0.0, 200);  // Backward
-    if (c == 'a') velocityRamp[1].go(0.0, 200);  // Left
-    if (c == 'd') velocityRamp[1].go(2.0, 200);   // Right
-
-    // Tilt control (IJKL)
-    //if (c == 'i') currentPitch.go(pitchTheta * M_PI / 180.0, 0.3);   // Pitch up
-    //if (c == 'k') currentPitch.go(-pitchTheta * M_PI / 180.0, 0.3);  // Pitch down
-    //if (c == 'j') currentRoll.go(-rollTheta * M_PI / 180.0, 0.3);    // Roll left
-    //if (c == 'l') currentRoll.go(rollTheta * M_PI / 180.0, 0.3);     // Roll right
-
-    if (c == 'h') {
-      outgoingInformation.command = CMD_INIT;
-      esp_now_send((uint8_t*)"\xFF\xFF\xFF\xFF\xFF\xFF",(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-      outgoingInformation.command = CMD_NONE;
-    }
-  }
-
-  // Center if no key pressed for timeout duration
-  if (millis() - lastKeyTime >= centerTimeout) {
-    velocityRamp[0].go(1, 200);
-    velocityRamp[1].go(1, 200);
-    currentPitch.go(0, 300);
-    currentRoll.go(0, 300);
-  }
-
-  float vr0 = velocityRamp[0].update()-1.0;
-  float vr1 = velocityRamp[1].update()-1.0;
-
-  float cangle = atan2(vr1, vr0) * 180.0 / M_PI;
-  float multiplier = 0.0;
-  if (abs(vr0) >= abs(vr1)) {
-    multiplier = 1/sqrt(1 + abs(vr1/vr0));
-  } else {
-    multiplier = 1/sqrt(1 + abs(vr0/vr1));    
-  }
-  if (vr0 == 0 || vr1 == 0) multiplier = 1.0;
-  magnitude = sqrt(vr0*vr0 + vr1*vr1) * multiplier;
 }
 
 std::array<float, 3> inverseKinematics(float x, float y, float z, bool isFrontLeg, bool isRightLeg) {
@@ -233,13 +184,8 @@ void processPSData() {
 
   PSXerror = psx.read(PSXdata);
   
-  if(PSXerror == PSXERROR_SUCCESS) {
-  Serial.println("controller success");
-  } else {
-  Serial.print("No success reading data. Check connections and timing.");
-  }
-  
   if(PSXdata.buttons & PSXBTN_START) {
+    Serial.println("Start button pressed");
     outgoingInformation.command = CMD_INIT;
     esp_now_send((uint8_t*)"\xFF\xFF\xFF\xFF\xFF\xFF",(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
     outgoingInformation.command = CMD_NONE;
@@ -250,37 +196,42 @@ void processPSData() {
   float LeftY = PSXdata.JoyLeftY;
   float RightX = PSXdata.JoyRightX;
   float RightY = PSXdata.JoyRightY;
-  
   //if not touching center
-  if (126 < LeftX < 130 || 126 < LeftY < 130) {
-    velocityRamp[0].go(1.0, 200); // Center
-    velocityRamp[1].go(1.0, 200); // Center
-    state = STATE_IDLE;
-  } else { //else process input
-    state = STATE_WALKING;
-    float LX = LeftX / 128.0; // 0 to 2
-    float LY = LeftY / 128.0; // 0 to 2
+  float lerpTime = 200; //time to lerp to new value
 
-    //go to between 0 or 2
-    velocityRamp[0].go(LX, 200);
-    velocityRamp[1].go(LY, 200);
+  static int lastLX = 128;
+  static int lastLY = 128;
+
+  if (abs(LeftX - lastLX) > 2) {
+     velocityRamp[0].go(LeftX, 1000);
+    lastLX = LeftX;
   }
 
+  if (abs(LeftY - lastLY) > 2) {
+   velocityRamp[1].go(LeftY, 1000);
+    lastLY = LeftY;
+  }
+
+  
+
    //go to -1 to 1
-    float vr0 = velocityRamp[0].update()-1.0;
-    float vr1 = velocityRamp[1].update()-1.0;
+    float vr0 = (velocityRamp[0].update()-128.0)/128.0;
+    float vr1 = -(velocityRamp[1].update()-127.0)/128.0;
 
     //constrain
-    vr0 = constrain(vr0, -1.0, 1.0);
-    vr1 = constrain(vr1, -1.0, 1.0);
 
     //from square to circle
     float xc = vr0 * sqrt(1.0 - (vr1*vr1)/2.0);
     float yc = vr1 * sqrt(1.0 - (vr0*vr0)/2.0);
-
     //theta, magnitude
-    langle = atan2(yc, xc);            // radians (-π to +π)
+    langle = atan2(yc, xc) - M_PI/2.0;  // Rotate so forward (up) is 0 degrees
+    langle = fmod(langle + 2.0 * M_PI, 2.0 * M_PI);  // Make all positive (0 to 2π)
     lagnitude = sqrt(xc*xc + yc*yc);  // 0 → 1
+    if (lagnitude == 0) {
+      langle = 0; // If no magnitude, set angle to 0 to avoid undefined angle
+    }
+
+    Serial.println("langle: " + String(langle) + " lagnitude: " + String(lagnitude));
 
 }
 
@@ -355,7 +306,6 @@ std::array<std::array<float, 3>, 4> stepMotion() {
   xyzBL[2] = xyzBL[2]; //* lagnitude * cos(langle);
 
   std::array<float, 3> moveTargetFR = inverseKinematics(xyzFR[0], xyzFR[1], xyzFR[2], true, true);
-  Serial.println("FR coords" + String(xyzFR[0]) + "," + String(xyzFR[1]) + "," + String(xyzFR[2]) + " angles " + String(moveTargetFR[0]) + "," + String(moveTargetFR[1]) + "," + String(moveTargetFR[2]));
   std::array<float, 3> moveTargetFL = inverseKinematics(xyzFL[0], xyzFL[1], xyzFL[2], true, false);
   std::array<float, 3> moveTargetBR = inverseKinematics(xyzBR[0], xyzBR[1], xyzBR[2], false, true);
   std::array<float, 3> moveTargetBL = inverseKinematics(xyzBL[0], xyzBL[1], xyzBL[2], false, false);
@@ -381,7 +331,8 @@ void setup() {
   psx.setupPins(DATA_PIN, CMD_PIN, ATT_PIN, CLOCK_PIN, 10);
   psx.config(PSXMODE_ANALOG);
 
-
+  velocityRamp[0].go(128);
+  velocityRamp[1].go(127);
   return;
 
   // Once ESPNow is successfully Init, we will register for Send CB to
@@ -397,9 +348,7 @@ void loop() {
   delay(100);
 
   //processSerialInput();
-  //processPSData();
-  
-  sendData(stepMotion());
+  processPSData();
 
   if (state == STATE_IDLE) {
     return;

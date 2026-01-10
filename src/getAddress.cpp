@@ -153,7 +153,7 @@ std::array<float, 3> inverseKinematics(float x, float y, float z, bool isFrontLe
   double k = kneeLength;
 
   x += 0.15;
-  y -= 0.3535;
+  y -= 0.296984848098;
   z += 0.0;
 
   //y += (isFrontLeg ? 1 : -1) * (frontBackJointDistance / 2) * tan(currentpitch.update());
@@ -162,7 +162,7 @@ std::array<float, 3> inverseKinematics(float x, float y, float z, bool isFrontLe
   double p = std::sqrt(std::max(x*x + y*y - h*h, 0.0));
   double L = std::sqrt(p*p + z*z);
 
-  double theta1 = atan2(y, x);
+  double theta1 = atan2(abs(x), abs(y)) + atan2(p, h);
   double cosTerm = (k*k - L*L - t*t) / (-2.0 * L * t);
   cosTerm = std::max(-1.0, std::min(1.0, cosTerm));
   double theta2 = M_PI/2.0 - std::acos(cosTerm) + atan2(z, p);
@@ -355,6 +355,7 @@ std::array<std::array<float, 3>, 4> stepMotion() {
   xyzBL[2] = xyzBL[2]; //* lagnitude * cos(langle);
 
   std::array<float, 3> moveTargetFR = inverseKinematics(xyzFR[0], xyzFR[1], xyzFR[2], true, true);
+  Serial.println("FR coords" + String(xyzFR[0]) + "," + String(xyzFR[1]) + "," + String(xyzFR[2]) + " angles " + String(moveTargetFR[0]) + "," + String(moveTargetFR[1]) + "," + String(moveTargetFR[2]));
   std::array<float, 3> moveTargetFL = inverseKinematics(xyzFL[0], xyzFL[1], xyzFL[2], true, false);
   std::array<float, 3> moveTargetBR = inverseKinematics(xyzBR[0], xyzBR[1], xyzBR[2], false, true);
   std::array<float, 3> moveTargetBL = inverseKinematics(xyzBL[0], xyzBL[1], xyzBL[2], false, false);
@@ -395,10 +396,9 @@ void setup() {
 void loop() {
   delay(100);
 
-  Serial.println("angle 1 at 0,0,0 :" + String(inverseKinematics(0, 0, 0, true, true)[0]) + " angle 2: " + String(inverseKinematics(0, 0, 0, true, true)[1]) + " angle 3: " + String(inverseKinematics(0, 0, 0, true, true)[2]));
   //processSerialInput();
   //processPSData();
-  return;
+  
   sendData(stepMotion());
 
   if (state == STATE_IDLE) {

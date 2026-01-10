@@ -141,8 +141,8 @@ void PRControl() {
 // ==============================
 
 void stepMotion() {
-  static double stepHeight = 0.05;
-  static double stepLength = 2.5 * stepHeight;
+  static double stepHeight = 0.075;
+  static double stepLength = 4 * stepHeight;
 
   double x1 = 0;
   double y1 = 1;
@@ -157,8 +157,8 @@ void stepMotion() {
   static double xyz[3] = {0, 0, 0};
   static unsigned long lastLoop = millis();
   double time = (millis() - lastLoop) / 1000.0;
-  static double halfloopTime = 1.0;
-  static double returnTime = 1.0;
+  static double halfloopTime = 3.0;
+  static double returnTime = 3.0;
 
   if (time > halfloopTime) {
     xyz[1] = 0;
@@ -173,8 +173,7 @@ void stepMotion() {
   double z = xyz[2] * directionalMagnitudeCoefficient * cos(directionalAngle);
   
   std::array<double, 3> moveTarget = inverseKinematics(x, xyz[1], z, true, true);
-  Serial.println("coords" + String(x) + "," + String(xyz[1]) + "," + String(z) + 
-                " angles " + String(moveTarget[0]) + "," + String(moveTarget[1]) + "," + String(moveTarget[2]));
+  //Serial.println("coords" + String(x) + "," + String(xyz[1]) + "," + String(z) + " angles " + String(moveTarget[0]) + "," + String(moveTarget[1]) + "," + String(moveTarget[2]));
 
   // if you have knee motor: FRTmotor.move(moveTarget[0]);
   FRHmotor.move(moveTarget[1]);
@@ -220,6 +219,7 @@ void processSerialInput() {
 // ==============================
 
 void setup() {
+  delay(400);
   Serial.begin(9600);
   Serial.println("Inverse Kinematics + FOC Ready");
 
@@ -251,8 +251,8 @@ void setup() {
 
   FRHmotor.voltage_limit = 3;
   FRKmotor.voltage_limit = 3;
-  FRHmotor.current_limit = 12;
-  FRKmotor.current_limit = 12;
+  FRHmotor.current_limit = 10;
+  FRKmotor.current_limit = 10;
   FRHmotor.velocity_limit = 100;
   FRKmotor.velocity_limit = 100;
 
@@ -290,17 +290,19 @@ void setup() {
 
 bool kill_switch = true; // true = enabled, false = disabled
 void checkKillSwitch() {
-  if (Serial.available()) { char c = Serial.read();
-  if (c == '/') { kill_switch = !kill_switch;
-  Serial.print("Kill switch: ");
-  Serial.println(kill_switch ? "ON" : "OFF"); } } }
+  if (Serial.available()) {
+    char c = Serial.read();
+    if (c == '/') { kill_switch = !kill_switch;
+        Serial.print("Kill switch: ");
+        Serial.println(kill_switch ? "ON" : "OFF"); } } }
 
 void loop() {
   checkKillSwitch(); if (kill_switch) { return; }
   FRHmotor.loopFOC();
   //FRKmotor.loopFOC();
 
-  processSerialInput();
-  stepMotion();
+  //processSerialInput();
+  //stepMotion();
+  FRHmotor.move(target_velocity);
   command.run();
 }

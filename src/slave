@@ -7,7 +7,6 @@
 #include <array>
 
 //receiver MAC Address
-#define MY_ID 0
 
 TwoWire I2Cone = TwoWire(0);
 TwoWire I2Ctwo = TwoWire(1);
@@ -23,7 +22,7 @@ BLDCMotor LEFTmotor = BLDCMotor(11);
 BLDCDriver3PWM RIGHTdriver = BLDCDriver3PWM(26, 27, 14);
 BLDCMotor RIGHTmotor = BLDCMotor(11);
 
-uint8_t broadcastAddress[] = {0x24, 0x6F, 0x28, 0xAE, 0x5C, 0xD4};
+uint8_t broadcastAddress[] = {0xB0, 0xCB, 0xD8, 0xEE, 0x59, 0x74};
 
 float thetaL = 0;
 float thetaR = 0;
@@ -34,21 +33,26 @@ typedef struct {
   float thetar;
 } ControlPacket;
 
+enum ControlCommand : uint8_t {
+  CMD_NONE = 0,
+  CMD_STOP = 1,
+  CMD_INIT = 2,
+  CMD_CALIBRATE = 3
+};
+
 ControlPacket incomingInformation;
 
+void addMaster() {
+  esp_now_peer_info_t peerInfo = {};
+  peerInfo.channel = 0;     // must match receiver WiFi channel
+  peerInfo.encrypt = false;
 
+    memcpy(peerInfo.peer_addr, broadcastAddress, 6);
 
-void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
-  memcpy(&incomingInformation, incomingData, sizeof(incomingInformation));
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+      Serial.print("Failed to add peer ");
+    }
   
-  if (incomingInformation.command == 1) {
-    initialize();
-    return;
-  }
-
-  thetaL = incomingInformation.thetal;
-  thetaR = incomingInformation.thetar;
-
 }
 
 void initialize() {
@@ -105,6 +109,29 @@ void initialize() {
 
 }
 
+void updateZero() {
+  return;
+  
+}
+
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  memcpy(&incomingInformation, incomingData, sizeof(incomingInformation));
+  
+  if (incomingInformation.command == CMD_INIT) {
+    initialize();
+    return;
+  }
+
+  if (incomingInformation.command == CMD_CALIBRATE) {
+    updateZero();
+    return;
+  }
+
+  thetaL = incomingInformation.thetal;
+  thetaR = incomingInformation.thetar;
+
+}
+
 void setup() {
   Serial.begin(9600);
   // Set device as a Wi-Fi Station
@@ -118,11 +145,17 @@ void setup() {
 
   // Register receive callback
   esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+  addMaster();
 }
 
 void loop() {
+
 //if true then move motors
+  Serial.println("Left angle: " + String(thetaL) + " Right angle: " + String(thetaR));
+
+  return;
 
   LEFTmotor.move(thetaL);
   RIGHTmotor.move(thetaR);
-}
+  
+  }

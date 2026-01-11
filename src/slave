@@ -6,38 +6,49 @@
 #include <cmath>
 #include <array>
 
-//receiver MAC Address
 
+MagneticSensorI2C RIGHTsensor = MagneticSensorI2C(AS5600_I2C);
+MagneticSensorI2C LEFTsensor = MagneticSensorI2C(AS5600_I2C);
 TwoWire I2Cone = TwoWire(0);
 TwoWire I2Ctwo = TwoWire(1);
 
-// Magnetic sensors (AS5600)
-MagneticSensorI2C LEFTsensor = MagneticSensorI2C(AS5600_I2C);
-MagneticSensorI2C RIGHTsensor = MagneticSensorI2C(AS5600_I2C);
-
-// Drivers and Motors
-BLDCDriver3PWM LEFTdriver = BLDCDriver3PWM(32, 33, 25);
-BLDCMotor LEFTmotor = BLDCMotor(11);
-
-BLDCDriver3PWM RIGHTdriver = BLDCDriver3PWM(26, 27, 14);
+//Motor parameters
 BLDCMotor RIGHTmotor = BLDCMotor(11);
+BLDCDriver3PWM RIGHTdriver = BLDCDriver3PWM(32,33,25);
+
+BLDCMotor LEFTmotor = BLDCMotor(11);
+BLDCDriver3PWM LEFTdriver = BLDCDriver3PWM(26,27,14);
+
+//Command settings
 
 uint8_t broadcastAddress[] = {0xB0, 0xCB, 0xD8, 0xEE, 0x59, 0x74};
 
-float thetaL = 0;
 float thetaR = 0;
+float thetaL = 0;
+
+float zeroOffsetR = 0;
+float zeroOffsetL = 0;
 
 typedef struct {
   uint8_t command;
-  float thetal;
   float thetar;
+  float thetal;
 } ControlPacket;
 
+enum states : uint8_t {
+  STATE_IDLE = 0,
+  STATE_WALKING = 1,
+  STATE_TURNING = 2
+};
+
+uint8_t state = STATE_IDLE;
+
 enum ControlCommand : uint8_t {
-  CMD_NONE = 0,
+  CMD_START = 0,
   CMD_STOP = 1,
   CMD_INIT = 2,
-  CMD_CALIBRATE = 3
+  CMD_CALIBRATE = 3,
+  CMD_NONE = 99
 };
 
 ControlPacket incomingInformation;
@@ -56,74 +67,115 @@ void addMaster() {
 }
 
 void initialize() {
-  I2Cone.begin(19, 18, 400000);
-  I2Ctwo.begin(23, 5, 400000);
-
-  LEFTsensor.init(&I2Cone);
-  RIGHTsensor.init(&I2Ctwo);
-
-  LEFTmotor.linkSensor(&LEFTsensor);
+  I2Cone.begin(19,18, 400000); 
+  I2Ctwo.begin(23,5, 400000);
+  RIGHTsensor.init(&I2Cone);
+  LEFTsensor.init(&I2Ctwo);
+  //Connect the motor object with the sensor object
   RIGHTmotor.linkSensor(&RIGHTsensor);
-
-  LEFTdriver.voltage_power_supply = 9;
-  RIGHTdriver.voltage_power_supply = 9;
-  LEFTdriver.pwm_frequency = 50000;
+  LEFTmotor.linkSensor(&LEFTsensor);
+  //Supply voltage setting [V]
   RIGHTdriver.pwm_frequency = 50000;
-  LEFTdriver.init();
+  RIGHTdriver.voltage_power_supply = 9;
   RIGHTdriver.init();
 
-  LEFTmotor.linkDriver(&LEFTdriver);
+  LEFTdriver.pwm_frequency = 50000;
+  LEFTdriver.voltage_power_supply = 9;
+  LEFTdriver.init();
+  //Connect the motor and driver objects
   RIGHTmotor.linkDriver(&RIGHTdriver);
-
-  LEFTmotor.controller = MotionControlType::angle;
-  RIGHTmotor.controller = MotionControlType::angle;
-
-  LEFTmotor.foc_modulation = FOCModulationType::SpaceVectorPWM;
+  LEFTmotor.linkDriver(&LEFTdriver);
+  
+  //FOC model selection
   RIGHTmotor.foc_modulation = FOCModulationType::SpaceVectorPWM;
+  LEFTmotor.foc_modulation = FOCModulationType::SpaceVectorPWM;
+  //Motion Control Mode Settings
+  RIGHTmotor.controller = MotionControlType::angle;
+  LEFTmotor.controller = MotionControlType::angle;
 
-  LEFTmotor.voltage_limit = 3;
-  RIGHTmotor.voltage_limit = 3;
-  LEFTmotor.current_limit = 10;
-  RIGHTmotor.current_limit = 10;
-  LEFTmotor.velocity_limit = 100;
-  RIGHTmotor.velocity_limit = 100;
-
+  //Speed PI loop setting
+  RIGHTmotor.PID_velocity.P = 0.1;
   LEFTmotor.PID_velocity.P = 0.05;
-  RIGHTmotor.PID_velocity.P = 0.05;
-  LEFTmotor.PID_velocity.I = 0.4;
   RIGHTmotor.PID_velocity.I = 0.4;
-  LEFTmotor.P_angle.P = 1;
+  LEFTmotor.PID_velocity.I = 0.4;
+
+  //Angle P ring setting
   RIGHTmotor.P_angle.P = 1;
-  LEFTmotor.LPF_velocity.Tf = 0.01;
+  LEFTmotor.P_angle.P = 1;
+  //Speed low-pass filter time constant
   RIGHTmotor.LPF_velocity.Tf = 0.01;
+  LEFTmotor.LPF_velocity.Tf = 0.01;
 
-  LEFTmotor.init();
-  RIGHTmotor.init();
-  LEFTmotor.initFOC();
-  RIGHTmotor.initFOC();
+  
+  
+  //Max motor limit motor
+  RIGHTmotor.voltage_limit = 3;
+  RIGHTmotor.current_limit = 6;
+  LEFTmotor.voltage_limit = 3;
+  LEFTmotor.current_limit = 6;
 
-  Serial.println("Motor ready. Enter commands or x,y,z values.");
+  //Set a maximum speed limit
+  RIGHTmotor.velocity_limit = 80;
+  LEFTmotor.velocity_limit = 110;
 
-  LEFTmotor.useMonitoring(Serial);
+  Serial.begin(9600);
   RIGHTmotor.useMonitoring(Serial);
+  LEFTmotor.useMonitoring(Serial);
 
+  RIGHTmotor.sensor_direction = CW;
+  LEFTmotor.sensor_direction = CCW;
+
+  //Initialize the motor
+  RIGHTmotor.init();
+  //LEFTmotor.init();
+  //Initialize FOC
+  RIGHTmotor.initFOC();
+  //LEFTmotor.initFOC();
+  
+  Serial.println(F("Motor ready."));
+  Serial.println(F("Set the target velocity using serial terminal:"));
+  
 }
 
 void updateZero() {
-  return;
+  static bool updated = false;
   
+  if (!updated) {
+    LEFTmotor.disable();
+    RIGHTmotor.disable();
+    updated = true;
+    return;
+  }
+  zeroOffsetR = RIGHTsensor.getAngle();
+  zeroOffsetL = LEFTsensor.getAngle();
+  LEFTmotor.enable();
+  RIGHTmotor.enable();
+  updated = false;
+  return;
 }
 
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&incomingInformation, incomingData, sizeof(incomingInformation));
   
   if (incomingInformation.command == CMD_INIT) {
+    Serial.println("Initializing Motors and Sensors");
     initialize();
     return;
   }
 
   if (incomingInformation.command == CMD_CALIBRATE) {
     updateZero();
+    state = STATE_WALKING;
+    return;
+  }
+
+  if (incomingInformation.command == CMD_START) {
+    state = STATE_WALKING;
+    return;
+  }
+
+  if (incomingInformation.command == CMD_STOP) {
+    state = STATE_WALKING;
     return;
   }
 
@@ -142,7 +194,7 @@ void setup() {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
-
+  
   // Register receive callback
   esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
   addMaster();
@@ -150,12 +202,16 @@ void setup() {
 
 void loop() {
 
+
+  if (state != STATE_WALKING) {
+    return;
+  }  
 //if true then move motors
-  Serial.println("Left angle: " + String(thetaL) + " Right angle: " + String(thetaR));
+  //Serial.println("Left angle: " + String(thetaL) + " Right angle: " + String(thetaR));
+  RIGHTmotor.loopFOC();
+  //LEFTmotor.loopFOC();
 
-  return;
-
-  LEFTmotor.move(thetaL);
-  RIGHTmotor.move(thetaR);
+  RIGHTmotor.move(thetaR - zeroOffsetR);
+  //LEFTmotor.move(thetaL - zeroOffsetL);
   
   }

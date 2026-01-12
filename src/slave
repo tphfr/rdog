@@ -6,6 +6,7 @@
 #include <cmath>
 #include <array>
 
+int id;
 
 MagneticSensorI2C RIGHTsensor = MagneticSensorI2C(AS5600_I2C);
 MagneticSensorI2C LEFTsensor = MagneticSensorI2C(AS5600_I2C);
@@ -110,13 +111,13 @@ void initialize() {
   
   //Max motor limit motor
   RIGHTmotor.voltage_limit = 3;
-  RIGHTmotor.current_limit = 6;
+  RIGHTmotor.current_limit = 8;
   LEFTmotor.voltage_limit = 3;
-  LEFTmotor.current_limit = 6;
+  LEFTmotor.current_limit = 8;
 
   //Set a maximum speed limit
-  RIGHTmotor.velocity_limit = 80;
-  LEFTmotor.velocity_limit = 110;
+  RIGHTmotor.velocity_limit = 100;
+  LEFTmotor.velocity_limit = 100;
 
   Serial.begin(9600);
   RIGHTmotor.useMonitoring(Serial);
@@ -127,10 +128,10 @@ void initialize() {
 
   //Initialize the motor
   RIGHTmotor.init();
-  //LEFTmotor.init();
+  LEFTmotor.init();
   //Initialize FOC
   RIGHTmotor.initFOC();
-  //LEFTmotor.initFOC();
+  LEFTmotor.initFOC();
   
   Serial.println(F("Motor ready."));
   Serial.println(F("Set the target velocity using serial terminal:"));
@@ -146,8 +147,14 @@ void updateZero() {
     updated = true;
     return;
   }
-  zeroOffsetR = RIGHTsensor.getAngle();
-  zeroOffsetL = LEFTsensor.getAngle();
+  if (id == 1 || id == 4) {
+    zeroOffsetR = RIGHTsensor.getAngle() + _PI * 0.5 * 36;
+    zeroOffsetL = LEFTsensor.getAngle() + _PI * 0.5 * 36;
+  } else {
+    zeroOffsetR = RIGHTsensor.getAngle() + _PI * 36;
+    zeroOffsetL = LEFTsensor.getAngle() + _PI * 36;
+  }
+
   LEFTmotor.enable();
   RIGHTmotor.enable();
   updated = false;
@@ -158,14 +165,26 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&incomingInformation, incomingData, sizeof(incomingInformation));
   
   if (incomingInformation.command == CMD_INIT) {
-    Serial.println("Initializing Motors and Sensors");
+    if (incomingInformation.thetal == 10000) {
+      id = 0;
+    } else if (incomingInformation.thetal == 10001) {
+      id = 1;
+    } else if (incomingInformation.thetal == 10002) {
+      id = 2;
+    } else if (incomingInformation.thetal == 10003) {
+      id = 3;
+    } else if (incomingInformation.thetal == 10004) {
+      id = 4;
+    } else if (incomingInformation.thetal == 10005) {
+      id = 5;
+    }
+        
     initialize();
     return;
   }
 
   if (incomingInformation.command == CMD_CALIBRATE) {
     updateZero();
-    state = STATE_WALKING;
     return;
   }
 
@@ -175,7 +194,7 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   }
 
   if (incomingInformation.command == CMD_STOP) {
-    state = STATE_WALKING;
+    state = STATE_IDLE;
     return;
   }
 
@@ -209,9 +228,9 @@ void loop() {
 //if true then move motors
   //Serial.println("Left angle: " + String(thetaL) + " Right angle: " + String(thetaR));
   RIGHTmotor.loopFOC();
-  //LEFTmotor.loopFOC();
+  LEFTmotor.loopFOC();
 
-  RIGHTmotor.move(thetaR - zeroOffsetR);
-  //LEFTmotor.move(thetaL - zeroOffsetL);
+  RIGHTmotor.move(thetaR * _PI / 180 - zeroOffsetR);
+  LEFTmotor.move(thetaL * _PI / 180 - zeroOffsetL);
   
   }

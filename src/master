@@ -129,23 +129,11 @@ std::array<float, 3> inverseKinematics(float x, float y, float z, bool isFrontLe
   theta1 *= (180.0 / M_PI);
   theta2 *= (180.0 / M_PI);
   theta3 *= (180.0 / M_PI);
+  
+  theta1 = 180 - theta1;
+  theta3 = 180 - theta3;
 
   return {float(theta1), float(theta2), float(theta3)};
-}
-
-std::array<float, 12> calculateAngles() {
-  float thetafr1, thetafr2, thetafr3;
-  float thetafl1, thetafl2, thetafl3;
-  float backright1, backright2, backright3;
-  float backleft1, backleft2, backleft3;
-  
-  float stepCycleTime = 1000.0; // milliseconds
-  
-
-  return {thetafr1, thetafr2, thetafr3,
-          thetafl1, thetafl2, thetafl3,
-          backright1, backright2, backright3,
-          backleft1, backleft2, backleft3};
 }
 
 void addPeers() {
@@ -167,7 +155,6 @@ void sendData(std::array<std::array<float, 3>, 4> coordinates) {
   unsigned long currentTime = millis();
   if (currentTime - lastSendTime >= sendInterval) {
     lastSendTime = currentTime;
-    std::array<float, 12> angles = calculateAngles();
     for (int i = 0; i <= 5; i++) {
       if (i <= 2 ) {
         outgoingInformation.thetar = coordinates[0][i]; // Front Right
@@ -189,6 +176,7 @@ void processPSData() {
     Serial.println("Init button pressed");
     outgoingInformation.command = CMD_INIT;
     for (int i = 0; i <= 5; i++) {
+      outgoingInformation.thetal = 10000 + i;
       esp_now_send(peerMac[i],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
     }
     outgoingInformation.command = CMD_NONE;
@@ -339,7 +327,8 @@ std::array<std::array<float, 3>, 4> stepMotion() {
 
   std::array<float, 3> moveTargetFR = inverseKinematics(xyzFR[0], xyzFR[1], xyzFR[2], true, true);
   std::array<float, 3> moveTargetFL = inverseKinematics(-xyzFL[0], xyzFL[1], xyzFL[2], true, false);
-  //Serial.println("FR Coords: " + String(xyzFR[0]) + "," + String(xyzFR[1]) + "," + String(xyzFR[2]));
+  Serial.println("FR Coords: " + String(moveTargetFR[0]) + "," + String(moveTargetFR[1]) + "," + String(moveTargetFR[2]));
+  Serial.println("FL Coords: " + String(moveTargetFL[0]) + "," + String(moveTargetFL[1]) + "," + String(moveTargetFL[2]));
   std::array<float, 3> moveTargetBR = inverseKinematics(xyzBR[0], xyzBR[1], xyzBR[2], false, true);
   std::array<float, 3> moveTargetBL = inverseKinematics(xyzBL[0], xyzBL[1], xyzBL[2], false, false);
 

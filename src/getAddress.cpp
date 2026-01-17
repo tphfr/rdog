@@ -81,11 +81,11 @@ void initialize() {
 
   //Supply voltage setting [V]
   RIGHTdriver.pwm_frequency = 50000;
-  RIGHTdriver.voltage_power_supply = 9;
+  RIGHTdriver.voltage_power_supply = 11.1;
   RIGHTdriver.init();
 
   LEFTdriver.pwm_frequency = 50000;
-  LEFTdriver.voltage_power_supply = 9;
+  LEFTdriver.voltage_power_supply = 11.1;
   LEFTdriver.init();
 
   //Connect the motor and driver objects

@@ -157,110 +157,124 @@ void addPeers() {
 void printList() {
 
   //active commands
-switch(tabIndex) {
-  case 12:
-    Serial.println("Calibrate button pressed");
-    outgoingInformation.command = CMD_CALIBRATE;
-    for (int i = 0; i <= 5; i++) {
-      esp_now_send(peerMac[i],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    }
-    outgoingInformation.command = CMD_NONE;
-  case 1111:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetar = 100000;
-    esp_now_send(peerMac[0],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Front-Right-Upper");
-    tabIndex = 111;
-    return;
-  case 1112:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetar = 100000;
-    esp_now_send(peerMac[1],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Front-Right-Middle");
-    tabIndex = 111;
-    return;
-  case 1113:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetar = 100000;
-    esp_now_send(peerMac[2],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Front-Right-Lower");
-    tabIndex = 111;
-    return;
-  case 1121:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetal = 100000;
-    esp_now_send(peerMac[0],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Front-Left-Upper");
-    tabIndex = 112;
-    return;
-  case 1122:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetal = 100000;
-    esp_now_send(peerMac[1],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Front-Left-Middle");
-    tabIndex = 112;
-    return;
-  case 1123:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetal = 100000;
-    esp_now_send(peerMac[2],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Front-Left-Lower");
-    tabIndex = 112;
-    return;
-  case 1131:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetar = 100000;
-    esp_now_send(peerMac[3],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Back-Right-Upper");
-    tabIndex = 113;
-    return;
-  case 1132:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetar = 100000;
-    esp_now_send(peerMac[4],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Back-Right-Middle");
-    tabIndex = 113;
-    return;
-  case 1133:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetar = 100000;
-    esp_now_send(peerMac[5],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Back-Right-Lower");
-    tabIndex = 113;
-    return;
-  case 1141:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetal = 100000;
-    esp_now_send(peerMac[3],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Back-Left-Upper");
-    tabIndex = 114;
-    return;
-  case 1142:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetal = 100000;
-    esp_now_send(peerMac[4],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Back-Left-Middle");
-    tabIndex = 114;
-    return;
-  case 1143:
-    outgoingInformation.command = CMD_INIT;
-    outgoingInformation.thetal = 100000;
-    esp_now_send(peerMac[5],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    outgoingInformation.command = CMD_NONE;
-    Serial.println("Sent init to Back-Left-Lower");
-    tabIndex = 114;
-    return;
+  switch(tabIndex) {
+    case 12:
+      Serial.println("Calibrate button pressed");
+      outgoingInformation.command = CMD_CALIBRATE;
+      for (int i = 0; i <= 5; i++) {
+        esp_now_send(peerMac[i],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      }
+      outgoingInformation.command = CMD_NONE;
+      tabIndex /= 10;
+      return;
+
+    case 13:
+      outgoingInformation.command = CMD_START;
+      state = STATE_WALKING;
+      for (int i = 0; i <= 5; i++) {
+        esp_now_send(peerMac[i],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      }
+      outgoingInformation.command = CMD_NONE;
+      tabIndex /= 10;
+      return;
+
+    case 1111:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetar = 100000;
+      esp_now_send(peerMac[0],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Front-Right-Upper");
+      tabIndex /= 10;
+      return;
+
+    case 1112:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetar = 100000;
+      esp_now_send(peerMac[1],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Front-Right-Middle");
+      tabIndex /= 10;
+      return;
+    case 1113:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetar = 100000;
+      esp_now_send(peerMac[2],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Front-Right-Lower");
+      tabIndex /= 10;
+      return;
+    case 1121:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetal = 100000;
+      esp_now_send(peerMac[0],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Front-Left-Upper");
+      tabIndex /= 10;
+      return;
+    case 1122:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetal = 100000;
+      esp_now_send(peerMac[1],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Front-Left-Middle");
+      tabIndex /= 10;
+      return;
+    case 1123:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetal = 100000;
+      esp_now_send(peerMac[2],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Front-Left-Lower");
+      tabIndex /= 10;
+      return;
+    case 1131:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetar = 100000;
+      esp_now_send(peerMac[3],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Back-Right-Upper");
+      tabIndex /= 10;
+      return;
+    case 1132:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetar = 100000;
+      esp_now_send(peerMac[4],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Back-Right-Middle");
+      tabIndex /= 10;
+      return;
+    case 1133:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetar = 100000;
+      esp_now_send(peerMac[5],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Back-Right-Lower");
+      tabIndex /= 10;
+      return;
+    case 1141:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetal = 100000;
+      esp_now_send(peerMac[3],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Back-Left-Upper");
+      tabIndex /= 10;
+      return;
+    case 1142:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetal = 100000;
+      esp_now_send(peerMac[4],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Back-Left-Middle");
+      tabIndex /= 10;
+      return;
+    case 1143:
+      outgoingInformation.command = CMD_INIT;
+      outgoingInformation.thetal = 100000;
+      esp_now_send(peerMac[5],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+      outgoingInformation.command = CMD_NONE;
+      Serial.println("Sent init to Back-Left-Lower");
+      tabIndex /= 10;
+      return;
 }
 
   //menu display
@@ -269,7 +283,7 @@ switch(tabIndex) {
       Serial.println("== Main Menu ==");
       Serial.println("1. Initialize Motors");
       Serial.println("2. Set Zero Position");
-      Serial.println("3. Activate Walking Mode");
+      Serial.println("3. Start");
       Serial.println("X. Kill Program");
       break;
 
@@ -380,16 +394,6 @@ void processPSData() {
     delay(200);
   }
 
-  if(PSXdata.buttons & PSXBTN_CIRCLE) {
-    Serial.println("Start button pressed");
-    outgoingInformation.command = CMD_START;
-    state = STATE_WALKING;
-    for (int i = 0; i <= 5; i++) {
-      esp_now_send(peerMac[i],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    }
-    outgoingInformation.command = CMD_NONE;
-  }
-
   if(PSXdata.buttons & PSXBTN_CROSS) {
     Serial.println("Stop button pressed");
     state = STATE_IDLE;
@@ -398,6 +402,7 @@ void processPSData() {
       esp_now_send(peerMac[i],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
     }
     outgoingInformation.command = CMD_NONE;
+    delay(200);
   }
 
   //read data
@@ -460,47 +465,46 @@ std::array<std::array<float, 3>, 4> stepMotion() {
   float timeFL = (millis() - lastLoopFL) / 1000.0;
   float timeBR = (millis() - lastLoopBR) / 1000.0;
   float timeBL = (millis() - lastLoopBL) / 1000.0;
-  static float halfloopTime = 1.0;
+  static float forwardTime = 1.0;
   static float returnTime = 1.0;
 
-  if (timeFR > halfloopTime) {
+  if (timeFR > forwardTime) {
     xyzFR[1] = 0;
-    xyzFR[2] = stepLength*0.5*cos((timeFR-halfloopTime)/returnTime*PI);
+    xyzFR[2] = stepLength*0.5*cos((timeFR-forwardTime)/returnTime*PI);
   } else {
-    xyzFR[1] = stepHeight*sin(timeFR/halfloopTime*PI);
-    xyzFR[2] = -stepLength*0.5*cos(timeFR/halfloopTime*PI);
+    xyzFR[1] = stepHeight*sin(timeFR/forwardTime*PI);
+    xyzFR[2] = -stepLength*0.5*cos(timeFR/forwardTime*PI);
   }
-  if (timeFR > halfloopTime + returnTime) lastLoopFR = millis();
+  if (timeFR > forwardTime + returnTime) lastLoopFR = millis();
 
-  if (timeFL > halfloopTime) {
-    xyzFL[1] = stepHeight*sin(timeFL/halfloopTime*PI);
-    xyzFL[2] = -stepLength*0.5*cos(timeFL/halfloopTime*PI);
+  if (timeFL > returnTime) {
+    xyzFL[1] = stepHeight*sin((timeFL-returnTime)/forwardTime*PI);
+    xyzFL[2] = -stepLength*0.5*cos((timeFL-returnTime)/forwardTime*PI);
   } else {
     xyzFL[1] = 0;
-    xyzFL[2] = stepLength*0.5*cos((timeFL-halfloopTime)/returnTime*PI);
+    xyzFL[2] = stepLength*0.5*cos(timeFL/returnTime*PI);
     
   }
-  if (timeFL > halfloopTime + returnTime) lastLoopFL = millis();
+  if (timeFL > forwardTime + returnTime) lastLoopFL = millis();
 
-  if (timeBR > halfloopTime) {
+  if (timeBR > forwardTime) {
     xyzBR[1] = 0;
-    xyzBR[2] = stepLength*0.5*cos((timeBR-halfloopTime)/returnTime*PI);
+    xyzBR[2] = stepLength*0.5*cos((timeBR-forwardTime)/returnTime*PI);
   } else {
-    xyzBR[1] = stepHeight*sin(timeBR/halfloopTime*PI);
-    xyzBR[2] = -stepLength*0.5*cos(timeBR/halfloopTime*PI);
+    xyzBR[1] = stepHeight*sin(timeBR/forwardTime*PI);
+    xyzBR[2] = -stepLength*0.5*cos(timeBR/forwardTime*PI);
   }
-  if (timeBR > halfloopTime + returnTime) lastLoopBR = millis();
+  if (timeBR > forwardTime + returnTime) lastLoopBR = millis();
 
-  if (timeBL > halfloopTime) {
-    xyzBL[1] = stepHeight*sin(timeBL/halfloopTime*PI);
-    xyzBL[2] = -stepLength*0.5*cos(timeBL/halfloopTime*PI);
+  if (timeBL > returnTime) {
+    xyzBL[1] = stepHeight*sin((timeBL-returnTime)/forwardTime*PI);
+    xyzBL[2] = -stepLength*0.5*cos((timeBL-returnTime)/forwardTime*PI);
   } else {
     xyzBL[1] = 0;
-    xyzBL[2] = stepLength*0.5*cos((timeBL-halfloopTime)/returnTime*PI);
+    xyzBL[2] = stepLength*0.5*cos(timeBL/returnTime*PI);
     
   }
-  if (timeBL > halfloopTime + returnTime) lastLoopBL = millis();
-
+  if (timeBL > forwardTime + returnTime) lastLoopBL = millis();
 
   xyzFR[0] = xyzFR[2] * lagnitude * -sin(langle);
   xyzFR[2] = xyzFR[2] * lagnitude * cos(langle);
@@ -516,7 +520,7 @@ std::array<std::array<float, 3>, 4> stepMotion() {
 
   std::array<float, 3> moveTargetFR = inverseKinematics(xyzFR[0], xyzFR[1], xyzFR[2], true, true);
   std::array<float, 3> moveTargetFL = inverseKinematics(-xyzFL[0], xyzFL[1], xyzFL[2], true, false);
-  //Serial.println("FR Coords: " + String(moveTargetFR[0]) + "," + String(moveTargetFR[1]) + "," + String(moveTargetFR[2]));
+  //Serial.println("FR Angles: " + String(moveTargetFL[0]) + "," + String(moveTargetFL[1]) + "," + String(moveTargetFL[2]));
   //Serial.println("FL Coords: " + String(moveTargetFL[0]) + "," + String(moveTargetFL[1]) + "," + String(moveTargetFL[2]));
   std::array<float, 3> moveTargetBR = inverseKinematics(xyzBR[0], xyzBR[1], xyzBR[2], false, true);
   std::array<float, 3> moveTargetBL = inverseKinematics(xyzBL[0], xyzBL[1], xyzBL[2], false, false);
@@ -524,8 +528,6 @@ std::array<std::array<float, 3>, 4> stepMotion() {
   return {moveTargetFR, moveTargetFL, moveTargetBR, moveTargetBL};
   //Serial.println("coords" + String(x) + "," + String(xyz[1]) + "," + String(z) + " angles " + String(moveTarget[0]) + "," + String(moveTarget[1]) + "," + String(moveTarget[2]));
 }
-
-
 
 void setup() {
   Serial.begin(9600);
@@ -558,12 +560,10 @@ void setup() {
 
   }
 
-
 void loop() {
   delay(100);
-
-  //processSerialInput();
   processPSData();
+
   //stepMotion();
   if (state == STATE_IDLE) {
     return;

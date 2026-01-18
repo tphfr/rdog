@@ -15,10 +15,10 @@ TwoWire I2Ctwo = TwoWire(1);
 
 //Motor parameters
 BLDCMotor RIGHTmotor = BLDCMotor(11);
-BLDCDriver3PWM RIGHTdriver = BLDCDriver3PWM(32,33,25);
+BLDCDriver3PWM RIGHTdriver = BLDCDriver3PWM(26,27,14);
 
 BLDCMotor LEFTmotor = BLDCMotor(11);
-BLDCDriver3PWM LEFTdriver = BLDCDriver3PWM(26,27,14);
+BLDCDriver3PWM LEFTdriver = BLDCDriver3PWM(32,33,25);
 
 //Command settings
 
@@ -67,73 +67,96 @@ void addMaster() {
   
 }
 
-void initialize() {
-  I2Cone.begin(19,18, 400000); 
-  I2Ctwo.begin(23,5, 400000);
-  RIGHTsensor.init(&I2Cone);
-  LEFTsensor.init(&I2Ctwo);
+void initializel() {
+  I2Cone.begin(19,18, 400000); //the one underneath
+  LEFTsensor.init(&I2Cone);
   //Connect the motor object with the sensor object
-  RIGHTmotor.linkSensor(&RIGHTsensor);
   LEFTmotor.linkSensor(&LEFTsensor);
-  //Supply voltage setting [V]
-  RIGHTdriver.pwm_frequency = 50000;
-  RIGHTdriver.voltage_power_supply = 9;
-  RIGHTdriver.init();
 
   LEFTdriver.pwm_frequency = 50000;
-  LEFTdriver.voltage_power_supply = 9;
+  LEFTdriver.voltage_power_supply = 11.1;
   LEFTdriver.init();
+
   //Connect the motor and driver objects
-  RIGHTmotor.linkDriver(&RIGHTdriver);
   LEFTmotor.linkDriver(&LEFTdriver);
-  
+
   //FOC model selection
-  RIGHTmotor.foc_modulation = FOCModulationType::SpaceVectorPWM;
   LEFTmotor.foc_modulation = FOCModulationType::SpaceVectorPWM;
   //Motion Control Mode Settings
-  RIGHTmotor.controller = MotionControlType::angle;
   LEFTmotor.controller = MotionControlType::angle;
 
   //Speed PI loop setting
+  LEFTmotor.PID_velocity.P = 0.1;
+  LEFTmotor.PID_velocity.I = 1;
+
+  //Angle P ring setting
+  LEFTmotor.P_angle.P = 1;
+
+  //Speed low-pass filter time constant
+  LEFTmotor.LPF_velocity.Tf = 0.01;
+  
+  //Max motor limit motor
+  LEFTmotor.voltage_limit = 3;
+  LEFTmotor.current_limit = 6;
+
+  //Set a maximum speed limit
+  LEFTmotor.velocity_limit = 80;
+
+  LEFTmotor.sensor_direction = CCW;
+  LEFTmotor.useMonitoring(Serial);
+  
+  //Initialize the motor
+  LEFTmotor.init();
+  //Initialize FOC
+  LEFTmotor.initFOC();
+
+  Serial.println(F("Left Motor ready."));
+  Serial.println(F("Set the target velocity using serial terminal:"));
+  
+}
+
+void initializer() { //the one above
+  I2Ctwo.begin(23,5, 400000);
+  RIGHTsensor.init(&I2Ctwo);
+  //Connect the motor object with the sensor object
+  RIGHTmotor.linkSensor(&RIGHTsensor);
+
+  RIGHTdriver.pwm_frequency = 50000;
+  RIGHTdriver.voltage_power_supply = 11.1;
+  RIGHTdriver.init();
+
+  //Connect the motor and driver objects
+  RIGHTmotor.linkDriver(&RIGHTdriver);
+  //FOC model selection
+  RIGHTmotor.foc_modulation = FOCModulationType::SpaceVectorPWM;
+  //Motion Control Mode Settings
+  RIGHTmotor.controller = MotionControlType::angle;
+
+  //Speed PI loop setting
   RIGHTmotor.PID_velocity.P = 0.1;
-  LEFTmotor.PID_velocity.P = 0.05;
-  RIGHTmotor.PID_velocity.I = 0.4;
-  LEFTmotor.PID_velocity.I = 0.4;
+  RIGHTmotor.PID_velocity.I = 1;
 
   //Angle P ring setting
   RIGHTmotor.P_angle.P = 1;
-  LEFTmotor.P_angle.P = 1;
   //Speed low-pass filter time constant
   RIGHTmotor.LPF_velocity.Tf = 0.01;
-  LEFTmotor.LPF_velocity.Tf = 0.01;
-
-  
   
   //Max motor limit motor
   RIGHTmotor.voltage_limit = 3;
-  RIGHTmotor.current_limit = 8;
-  LEFTmotor.voltage_limit = 3;
-  LEFTmotor.current_limit = 8;
+  RIGHTmotor.current_limit = 6;
 
   //Set a maximum speed limit
-  RIGHTmotor.velocity_limit = 100;
-  LEFTmotor.velocity_limit = 100;
-
-  Serial.begin(9600);
-  RIGHTmotor.useMonitoring(Serial);
-  LEFTmotor.useMonitoring(Serial);
+  RIGHTmotor.velocity_limit = 80;
 
   RIGHTmotor.sensor_direction = CW;
-  LEFTmotor.sensor_direction = CCW;
-
+  RIGHTmotor.useMonitoring(Serial);
+  
   //Initialize the motor
   RIGHTmotor.init();
-  LEFTmotor.init();
   //Initialize FOC
   RIGHTmotor.initFOC();
-  LEFTmotor.initFOC();
-  
-  Serial.println(F("Motor ready."));
+
+  Serial.println(F("Right Motor ready."));
   Serial.println(F("Set the target velocity using serial terminal:"));
   
 }
@@ -150,9 +173,12 @@ void updateZero() {
   if (id == 1 || id == 4) {
     zeroOffsetR = RIGHTsensor.getAngle() + _PI * 0.5 * 36;
     zeroOffsetL = LEFTsensor.getAngle() + _PI * 0.5 * 36;
-  } else {
-    zeroOffsetR = RIGHTsensor.getAngle() + _PI * 36;
-    zeroOffsetL = LEFTsensor.getAngle() + _PI * 36;
+  } else if (id == 2 || id == 5) {
+    zeroOffsetR = RIGHTsensor.getAngle(); // + _PI * 36; if real
+    zeroOffsetL = LEFTsensor.getAngle();
+  } else if (id == 3 || id == 6) {
+    zeroOffsetR = RIGHTsensor.getAngle();
+    zeroOffsetL = LEFTsensor.getAngle();
   }
 
   LEFTmotor.enable();
@@ -164,24 +190,36 @@ void updateZero() {
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&incomingInformation, incomingData, sizeof(incomingInformation));
   
-  if (incomingInformation.command == CMD_INIT) {
-    if (incomingInformation.thetal == 10000) {
+  if (incomingInformation.thetar == 100000) {
+      initializer();
+      return;
+    }
+  if (incomingInformation.thetal == 100000) {
+      initializel();
+      return;
+    }
+
+  if (incomingInformation.thetal == 10000) {
       id = 0;
+      return;
     } else if (incomingInformation.thetal == 10001) {
       id = 1;
+      return;
     } else if (incomingInformation.thetal == 10002) {
       id = 2;
+      return;
     } else if (incomingInformation.thetal == 10003) {
       id = 3;
+      return;
     } else if (incomingInformation.thetal == 10004) {
       id = 4;
+      return;
     } else if (incomingInformation.thetal == 10005) {
       id = 5;
+      return;
     }
-        
-    initialize();
-    return;
-  }
+
+
 
   if (incomingInformation.command == CMD_CALIBRATE) {
     updateZero();
@@ -217,14 +255,17 @@ void setup() {
   // Register receive callback
   esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
   addMaster();
+  
+  //initializer();
+  //when u read this tomorrow, upload like normal for the one thats plugged in, while for the other one,
+  //swap the  addresses in the motor and the sensor, keep the rest, i think it should work
 }
 
 void loop() {
-
-
   if (state != STATE_WALKING) {
     return;
   }  
+
 //if true then move motors
   //Serial.println("Left angle: " + String(thetaL) + " Right angle: " + String(thetaR));
   RIGHTmotor.loopFOC();

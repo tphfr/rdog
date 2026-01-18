@@ -85,6 +85,9 @@ float lagnitude;
 float rangle;
 float ragnitude;
 
+u_int8_t selectionIndex = 1;
+u_int16_t tabIndex = 1;
+
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   if (status ==0){
     success = "Delivery Success :)";
@@ -151,6 +154,176 @@ void addPeers() {
   }
 }
 
+void printList() {
+
+  //active commands
+switch(tabIndex) {
+  case 12:
+    Serial.println("Calibrate button pressed");
+    outgoingInformation.command = CMD_CALIBRATE;
+    for (int i = 0; i <= 5; i++) {
+      esp_now_send(peerMac[i],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    }
+    outgoingInformation.command = CMD_NONE;
+  case 1111:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetar = 100000;
+    esp_now_send(peerMac[0],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Front-Right-Upper");
+    tabIndex = 111;
+    return;
+  case 1112:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetar = 100000;
+    esp_now_send(peerMac[1],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Front-Right-Middle");
+    tabIndex = 111;
+    return;
+  case 1113:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetar = 100000;
+    esp_now_send(peerMac[2],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Front-Right-Lower");
+    tabIndex = 111;
+    return;
+  case 1121:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetal = 100000;
+    esp_now_send(peerMac[0],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Front-Left-Upper");
+    tabIndex = 112;
+    return;
+  case 1122:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetal = 100000;
+    esp_now_send(peerMac[1],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Front-Left-Middle");
+    tabIndex = 112;
+    return;
+  case 1123:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetal = 100000;
+    esp_now_send(peerMac[2],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Front-Left-Lower");
+    tabIndex = 112;
+    return;
+  case 1131:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetar = 100000;
+    esp_now_send(peerMac[3],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Back-Right-Upper");
+    tabIndex = 113;
+    return;
+  case 1132:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetar = 100000;
+    esp_now_send(peerMac[4],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Back-Right-Middle");
+    tabIndex = 113;
+    return;
+  case 1133:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetar = 100000;
+    esp_now_send(peerMac[5],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Back-Right-Lower");
+    tabIndex = 113;
+    return;
+  case 1141:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetal = 100000;
+    esp_now_send(peerMac[3],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Back-Left-Upper");
+    tabIndex = 114;
+    return;
+  case 1142:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetal = 100000;
+    esp_now_send(peerMac[4],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Back-Left-Middle");
+    tabIndex = 114;
+    return;
+  case 1143:
+    outgoingInformation.command = CMD_INIT;
+    outgoingInformation.thetal = 100000;
+    esp_now_send(peerMac[5],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+    outgoingInformation.command = CMD_NONE;
+    Serial.println("Sent init to Back-Left-Lower");
+    tabIndex = 114;
+    return;
+}
+
+  //menu display
+  switch(tabIndex) {
+    case 1:
+      Serial.println("== Main Menu ==");
+      Serial.println("1. Initialize Motors");
+      Serial.println("2. Set Zero Position");
+      Serial.println("3. Activate Walking Mode");
+      Serial.println("X. Kill Program");
+      break;
+
+    case 11:
+      Serial.println("== Initialize Motors ==");
+      Serial.println("1. Initialize Front-Right Motors");
+      Serial.println("2. Initialize Front-Left Motors");
+      Serial.println("3. Initialize Back-Right Motors");
+      Serial.println("4. Initialize Back-Left Motors");
+      Serial.println("<. Back");
+      Serial.println("X. Kill Program");
+      break;
+
+    case 111:
+      Serial.println("== Initialize Front-Right Motors ==");
+      Serial.println("1. Initialize Front-Right-Upper Motor");
+      Serial.println("2. Initialize Front-Right-Middle Motor");
+      Serial.println("3. Initialize Front-Right-Lower Motor");
+      Serial.println("<. Back");
+      Serial.println("X. Kill Program");
+      break; 
+
+    case 112:
+      Serial.println("== Initialize Front-Left Motors ==");
+      Serial.println("1. Initialize Front-Left-Upper Motor");
+      Serial.println("2. Initialize Front-Left-Middle Motor");
+      Serial.println("3. Initialize Front-Left-Lower Motor");
+      Serial.println("<. Back");
+      Serial.println("X. Kill Program");
+      break;
+
+    case 113:
+      Serial.println("== Initialize Back-Right Motors ==");
+      Serial.println("1. Initialize Back-Right-Upper Motor");
+      Serial.println("2. Initialize Back-Right-Middle Motor");
+      Serial.println("3. Initialize Back-Right-Lower Motor");
+      Serial.println("<. Back");
+      Serial.println("X. Kill Program");
+      break;
+
+    case 114:
+      Serial.println("== Initialize Back-Left Motors ==");
+      Serial.println("1. Initialize Back-Left-Upper Motor");
+      Serial.println("2. Initialize Back-Left-Middle Motor");
+      Serial.println("3. Initialize Back-Left-Lower Motor");
+      Serial.println("<. Back");
+      Serial.println("X. Kill Program");
+      break;
+  }
+
+  //Serial.println("Current Tab: " + String(tabIndex));
+  Serial.println("Selected Index: " + String(selectionIndex));
+}
+
 void sendData(std::array<std::array<float, 3>, 4> coordinates) {
   unsigned long currentTime = millis();
   if (currentTime - lastSendTime >= sendInterval) {
@@ -172,23 +345,39 @@ void processPSData() {
 
   PSXerror = psx.read(PSXdata);
   
-  if(PSXdata.buttons & PSXBTN_SQUARE) {
-    Serial.println("Init button pressed");
-    outgoingInformation.command = CMD_INIT;
-    for (int i = 0; i <= 5; i++) {
-      outgoingInformation.thetal = 10000 + i;
-      esp_now_send(peerMac[i],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
-    }
-    outgoingInformation.command = CMD_NONE;
+  if(PSXdata.buttons & PSXBTN_UP) {
+    selectionIndex--;
+    if (selectionIndex < 1) selectionIndex = 1;
+    Serial.println("");
+    printList();
+    delay(200);
   }
 
-  if(PSXdata.buttons & PSXBTN_TRIANGLE) {
-    Serial.println("Calibrate button pressed");
-    outgoingInformation.command = CMD_CALIBRATE;
-    for (int i = 0; i <= 5; i++) {
-      esp_now_send(peerMac[i],(uint8_t*)&outgoingInformation,sizeof(outgoingInformation));
+  if(PSXdata.buttons & PSXBTN_DOWN) {
+    selectionIndex++;
+    Serial.println("");
+    printList();
+    delay(200);
+  }
+
+  if(PSXdata.buttons & (PSXBTN_R1 | PSXBTN_RIGHT)) {
+    tabIndex *= 10;
+    tabIndex += selectionIndex;
+    selectionIndex = 1;
+    Serial.println("");
+    printList();
+    delay(200);
+  }
+
+  if(PSXdata.buttons & PSXBTN_LEFT) {
+    if (tabIndex <= 1) {
+      return;
     }
-    outgoingInformation.command = CMD_NONE;
+    tabIndex /= 10;
+    selectionIndex = 1;
+    Serial.println("");
+    printList();
+    delay(200);
   }
 
   if(PSXdata.buttons & PSXBTN_CIRCLE) {
@@ -327,14 +516,16 @@ std::array<std::array<float, 3>, 4> stepMotion() {
 
   std::array<float, 3> moveTargetFR = inverseKinematics(xyzFR[0], xyzFR[1], xyzFR[2], true, true);
   std::array<float, 3> moveTargetFL = inverseKinematics(-xyzFL[0], xyzFL[1], xyzFL[2], true, false);
-  Serial.println("FR Coords: " + String(moveTargetFR[0]) + "," + String(moveTargetFR[1]) + "," + String(moveTargetFR[2]));
-  Serial.println("FL Coords: " + String(moveTargetFL[0]) + "," + String(moveTargetFL[1]) + "," + String(moveTargetFL[2]));
+  //Serial.println("FR Coords: " + String(moveTargetFR[0]) + "," + String(moveTargetFR[1]) + "," + String(moveTargetFR[2]));
+  //Serial.println("FL Coords: " + String(moveTargetFL[0]) + "," + String(moveTargetFL[1]) + "," + String(moveTargetFL[2]));
   std::array<float, 3> moveTargetBR = inverseKinematics(xyzBR[0], xyzBR[1], xyzBR[2], false, true);
   std::array<float, 3> moveTargetBL = inverseKinematics(xyzBL[0], xyzBL[1], xyzBL[2], false, false);
 
   return {moveTargetFR, moveTargetFL, moveTargetBR, moveTargetBL};
   //Serial.println("coords" + String(x) + "," + String(xyz[1]) + "," + String(z) + " angles " + String(moveTarget[0]) + "," + String(moveTarget[1]) + "," + String(moveTarget[2]));
 }
+
+
 
 void setup() {
   Serial.begin(9600);
@@ -353,6 +544,10 @@ void setup() {
   psx.setupPins(DATA_PIN, CMD_PIN, ATT_PIN, CLOCK_PIN, 10);
   psx.config(PSXMODE_ANALOG);
 
+  Serial.println("Welcome to R-Dog Master Controller");
+  Serial.println("Select by pressing R1 or >, and scroll using up and down arrows.");
+  printList();
+
   velocityRamp[0].go(128);
   velocityRamp[1].go(127);
   return;
@@ -369,7 +564,7 @@ void loop() {
 
   //processSerialInput();
   processPSData();
-  stepMotion();
+  //stepMotion();
   if (state == STATE_IDLE) {
     return;
   } else if (state == STATE_WALKING) {
